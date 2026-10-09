@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 namespace dev\suvera\snowprint\web\admin;
 
+use dev\suvera\snowprint\query\RetentionService;
+use dev\suvera\snowprint\query\RollupBuilder;
 use dev\suvera\snowprint\site\ApiKeyService;
 use dev\suvera\snowprint\site\GoalService;
 use dev\suvera\snowprint\site\InvalidInput;
@@ -30,6 +32,12 @@ class AdminController {
 
     #[Autowired]
     private GoalService $goals;
+
+    #[Autowired]
+    private RollupBuilder $rollups;
+
+    #[Autowired]
+    private RetentionService $retention;
 
     #[GetMapping(path: '/api/admin/sites')]
     public function listSites(): array {
@@ -88,6 +96,18 @@ class AdminController {
         return $this->keys->revoke($id)
             ? ResponseEntity::ok(['revoked' => $id])
             : ResponseEntity::notFound()->withJson(['error' => 'no active key with id ' . $id]);
+    }
+
+    /** Runs the rollup job now (it also runs every 10 minutes on worker pods). */
+    #[PostMapping(path: '/api/admin/jobs/rollup')]
+    public function runRollup(): array {
+        return ['days_rolled_up' => $this->rollups->rollPending()];
+    }
+
+    /** Runs the retention sweep now (it also runs hourly on worker pods). */
+    #[PostMapping(path: '/api/admin/jobs/retention')]
+    public function runRetention(): array {
+        return $this->retention->apply();
     }
 
     private static function json(HttpRequest $request): array {

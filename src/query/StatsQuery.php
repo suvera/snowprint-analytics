@@ -9,10 +9,14 @@ use dev\winterframework\stereotype\Autowired;
 use dev\winterframework\stereotype\Service;
 
 /**
- * Reporting queries shared by the dashboard and MCP (PRD §6.2, §7.3). Exact
- * counts over raw events (decision D4). A filter selects the sessions that
- * contain a matching event; session metrics (visits, bounce rate, duration)
- * are computed over those whole sessions.
+ * Reporting queries shared by the dashboard and MCP (PRD §6.2, §7.3). A filter
+ * selects the sessions that contain a matching event; session metrics (visits,
+ * bounce rate, duration) are computed over those whole sessions.
+ *
+ * Unfiltered reports read complete days from rollup_daily (RollupService) and
+ * the rest of the period from raw events. Filtered reports, goals and hourly
+ * series read raw events only, so they cover the raw retention window.
+ * Rollups split sessions at local midnight.
  *
  * Visitors are counted by the daily-rotating hash, so a person who returns on
  * another day counts again: multi-day "visitors" are daily-unique visitors.
@@ -25,29 +29,27 @@ class StatsQuery {
     public const MAX_LIMIT = 100;
     public const MIN_ANOMALY_DIFF = 3;
 
+    /** Additive per-value sums that reports are finalized from. */
+    public const SUMS = ['visitors', 'visits', 'pageviews', 'events', 'bounces', 'duration_sum'];
+
     #[Autowired]
     private PdbcTemplate $db;
 
+    #[Autowired]
+    private RollupService $rollups;
+
     /** @return array<string, int|float> */
     public function overview(int $siteId, Period $period, Filters $filters): array {
-        [$cte, $binds] = $this->baseCte($siteId, $period, $filters);
-        $row = $this->db->queryForList($cte . "
-            SELECT (SELECT count(DISTINCT visitor_hash) FROM matched) AS visitors,
-                   (SELECT count(*) FROM matched WHERE name = 'pageview') AS pageviews,
-                   (SELECT count(*) FROM matched WHERE name <> 'pageview') AS events,
-                   count(*) AS visits,
-                   coalesce(round(100.0 * count(*) FILTER (WHERE n = 1) / nullif(count(*), 0)), 0) AS bounce_rate,
-                   coalesce(round(avg(dur)), 0) AS visit_duration,
-                   coalesce(round(avg(pv)::numeric, 2), 0) AS views_per_visit
-            FROM sessions", $binds)[0];
+        $s = $this->sums($siteId, $period, $filters, null)[''] ?? self::zero();
+        $visits = $s['visits'];
         return [
-            'visitors' => (int) $row['visitors'],
-            'visits' => (int) $row['visits'],
-            'pageviews' => (int) $row['pageviews'],
-            'events' => (int) $row['events'],
-            'views_per_visit' => (float) $row['views_per_visit'],
-            'bounce_rate' => (int) $row['bounce_rate'],
-            'visit_duration' => (int) $row['visit_duration'],
+            'visitors' => $s['visitors'],
+            'visits' => $visits,
+            'pageviews' => $s['pageviews'],
+            'events' => $s['events'],
+            'views_per_visit' => $visits === 0 ? 0.0 : round($s['session_pageviews'] / $visits, 2),
+            'bounce_rate' => $visits === 0 ? 0 : (int) round(100 * $s['bounces'] / $visits),
+            'visit_duration' => $visits === 0 ? 0 : (int) round($s['duration_sum'] / $visits),
         ];
     }
 
@@ -75,17 +77,30 @@ class StatsQuery {
         if (!in_array($interval, self::INTERVALS, true)) {
             throw new InvalidInput('unknown interval "' . $interval . '"; use hour, day or month');
         }
+        $format = ['hour' => 'Y-m-d H:00', 'day' => 'Y-m-d', 'month' => 'Y-m'][$interval];
+        $values = [];
+        $rolled = $interval === 'hour' || !$filters->isEmpty() ? null : $this->rollups->rolledRange($siteId, $period);
+        if ($rolled !== null) {
+            foreach ($this->rollups->dailyTotals($siteId, $rolled, $metric) as $day => $value) {
+                $key = (new \DateTimeImmutable((string) $day))->format($format);
+                $values[$key] = ($values[$key] ?? 0) + $value;
+            }
+        }
+
         $value = match ($metric) {
             'visitors' => 'count(DISTINCT visitor_hash)',
             'pageviews' => "count(*) FILTER (WHERE name = 'pageview')",
             'visits' => 'count(DISTINCT sid)',
             'events' => "count(*) FILTER (WHERE name <> 'pageview')",
         };
-        [$cte, $binds] = $this->baseCte($siteId, $period, $filters);
+        $pgFormat = ['hour' => 'YYYY-MM-DD HH24:00', 'day' => 'YYYY-MM-DD', 'month' => 'YYYY-MM'][$interval];
+        [$cte, $binds] = $this->cte($siteId, $period->start, $period->end, $filters, $rolled);
         $rows = $this->db->queryForList($cte . "
-            SELECT to_char(date_trunc('$interval', ts AT TIME ZONE ?), 'YYYY-MM-DD\"T\"HH24:MI') AS bucket, $value AS value
+            SELECT to_char(date_trunc('$interval', ts AT TIME ZONE ?), '$pgFormat') AS bucket, $value AS value
             FROM matched GROUP BY 1", [...$binds, $period->timezone->getName()]);
-        $values = array_column($rows, 'value', 'bucket');
+        foreach ($rows as $r) {
+            $values[$r['bucket']] = ($values[$r['bucket']] ?? 0) + (int) $r['value'];
+        }
 
         $series = [];
         $step = ['hour' => '+1 hour', 'day' => '+1 day', 'month' => '+1 month'][$interval];
@@ -97,11 +112,8 @@ class StatsQuery {
         };
         $end = $period->end->setTimezone($period->timezone);
         for (; $cursor < $end; $cursor = $cursor->modify($step)) {
-            $key = $cursor->format('Y-m-d\TH:i');
-            $series[] = [
-                'date' => $interval === 'hour' ? $cursor->format('Y-m-d H:00') : $cursor->format($interval === 'day' ? 'Y-m-d' : 'Y-m'),
-                'value' => (int) ($values[$key] ?? 0),
-            ];
+            $key = $cursor->format($format);
+            $series[] = ['date' => $key, 'value' => (int) ($values[$key] ?? 0)];
         }
         return $series;
     }
@@ -113,66 +125,32 @@ class StatsQuery {
                 . implode(', ', Dimensions::breakdownNames()));
         }
         $limit = max(1, min(self::MAX_LIMIT, $limit));
-        [$cte, $binds] = $this->baseCte($siteId, $period, $filters);
-
-        if (in_array($dimension, Dimensions::SESSION_DIMENSIONS, true)) {
-            // Entry/exit page: the first/last pageview of each session.
-            $order = $dimension === 'entry_page' ? 'ASC' : 'DESC';
-            $rows = $this->db->queryForList($cte . ",
-                edge AS (
-                    SELECT DISTINCT ON (sid) sid, visitor_hash, path FROM base
-                    WHERE name = 'pageview' AND sid IN (SELECT sid FROM sessions)
-                    ORDER BY sid, ts $order, id $order
-                )
-                SELECT e.path AS value, count(DISTINCT e.visitor_hash) AS visitors, count(*) AS visits,
-                       count(*) AS pageviews, 0 AS events,
-                       round(100.0 * count(*) FILTER (WHERE s.n = 1) / count(*)) AS bounce_rate,
-                       round(avg(s.dur)) AS visit_duration
-                FROM edge e JOIN sessions s USING (sid)
-                GROUP BY e.path ORDER BY visits DESC, e.path LIMIT ?", [...$binds, $limit]);
-        } else {
-            // Counts over matching events; bounce rate and duration over the
-            // sessions in which the value appears.
-            $column = Dimensions::COLUMNS[$dimension];
-            $none = $dimension === 'source' ? Dimensions::DIRECT : Dimensions::NONE;
-            $onlyEvents = $dimension === 'event' ? "WHERE name <> 'pageview'" : '';
-            $rows = $this->db->queryForList($cte . ",
-                tagged AS (SELECT coalesce($column, ?) AS value, * FROM matched $onlyEvents),
-                counts AS (
-                    SELECT value, count(DISTINCT visitor_hash) AS visitors, count(DISTINCT sid) AS visits,
-                           count(*) FILTER (WHERE name = 'pageview') AS pageviews,
-                           count(*) FILTER (WHERE name <> 'pageview') AS events
-                    FROM tagged GROUP BY value
-                ),
-                quality AS (
-                    SELECT t.value,
-                           round(100.0 * count(*) FILTER (WHERE s.n = 1) / count(*)) AS bounce_rate,
-                           round(avg(s.dur)) AS visit_duration
-                    FROM (SELECT DISTINCT value, sid FROM tagged) t JOIN sessions s USING (sid)
-                    GROUP BY t.value
-                )
-                SELECT c.*, q.bounce_rate, q.visit_duration
-                FROM counts c JOIN quality q USING (value)
-                ORDER BY c.visitors DESC, c.value LIMIT ?", [...$binds, $none, $limit]);
+        $rank = in_array($dimension, Dimensions::SESSION_DIMENSIONS, true) ? 'visits' : 'visitors';
+        $rows = [];
+        foreach ($this->sums($siteId, $period, $filters, $dimension) as $value => $s) {
+            $visits = $s['visits'];
+            $rows[] = [
+                'value' => (string) $value,
+                'visitors' => $s['visitors'],
+                'visits' => $visits,
+                'pageviews' => $s['pageviews'],
+                'events' => $s['events'],
+                'bounce_rate' => $visits === 0 ? 0 : (int) round(100 * $s['bounces'] / $visits),
+                'visit_duration' => $visits === 0 ? 0 : (int) round($s['duration_sum'] / $visits),
+            ];
         }
-        return array_map(static fn(array $r) => [
-            'value' => (string) $r['value'],
-            'visitors' => (int) $r['visitors'],
-            'visits' => (int) $r['visits'],
-            'pageviews' => (int) $r['pageviews'],
-            'events' => (int) $r['events'],
-            'bounce_rate' => (int) $r['bounce_rate'],
-            'visit_duration' => (int) $r['visit_duration'],
-        ], $rows);
+        usort($rows, static fn($a, $b) => [$b[$rank], $a['value']] <=> [$a[$rank], $b['value']]);
+        return array_slice($rows, 0, $limit);
     }
 
     /**
      * Conversions per goal: unique visitors who completed it, total completions,
      * and conversion rate against all visitors in the period (filters apply).
+     * Raw events only.
      * @return list<array{id: int, name: string, kind: string, match: string, visitors: int, completions: int, conversion_rate: float}>
      */
     public function goals(int $siteId, Period $period, Filters $filters): array {
-        [$cte, $binds] = $this->baseCte($siteId, $period, $filters);
+        [$cte, $binds] = $this->cte($siteId, $period->start, $period->end, $filters, null);
         $rows = $this->db->queryForList($cte . ",
             goal AS (
                 SELECT id, name, kind, match,
@@ -246,12 +224,109 @@ class StatsQuery {
     }
 
     /**
-     * CTEs shared by every report: base (period events with session id),
-     * matched (events passing the filters) and sessions (whole sessions that
-     * contain a matched event).
+     * Sums per value of $dimension (null: one row '' with the totals) over the
+     * period: rolled-up days plus raw events for the rest.
+     * @return array<string, array<string, int>>
+     */
+    private function sums(int $siteId, Period $period, Filters $filters, ?string $dimension): array {
+        $rolled = $filters->isEmpty() ? $this->rollups->rolledRange($siteId, $period) : null;
+        $rows = $this->rawSums($siteId, $period->start, $period->end, $filters, $dimension, $rolled);
+        if ($rolled !== null) {
+            foreach ($this->rollups->sums($siteId, $rolled, $dimension ?? '') as $value => $s) {
+                $s['session_pageviews'] = $s['pageviews'];
+                $current = $rows[$value] ?? self::zero();
+                foreach ($s as $k => $v) {
+                    $current[$k] += $v;
+                }
+                $rows[$value] = $current;
+            }
+        }
+        return $rows;
+    }
+
+    /**
+     * Additive sums over raw events in [from, to) outside $exclude, per value
+     * of $dimension (null: one row '' with the totals). RollupService rolls
+     * up a day with it.
+     * @param array{0: \DateTimeImmutable, 1: \DateTimeImmutable}|null $exclude
+     * @return array<string, array<string, int>> value => SUMS + session_pageviews
+     */
+    public function rawSums(int $siteId, \DateTimeImmutable $from, \DateTimeImmutable $to, Filters $filters,
+                            ?string $dimension, ?array $exclude = null): array {
+        [$cte, $binds] = $this->cte($siteId, $from, $to, $filters, $exclude);
+        if ($dimension === null) {
+            $rows = $this->db->queryForList($cte . "
+                SELECT '' AS value,
+                       (SELECT count(DISTINCT visitor_hash) FROM matched) AS visitors,
+                       (SELECT count(*) FROM matched WHERE name = 'pageview') AS pageviews,
+                       (SELECT count(*) FROM matched WHERE name <> 'pageview') AS events,
+                       count(*) AS visits, count(*) FILTER (WHERE n = 1) AS bounces,
+                       coalesce(round(sum(dur)), 0) AS duration_sum, coalesce(sum(pv), 0) AS session_pageviews
+                FROM sessions", $binds);
+            if ((int) $rows[0]['visits'] === 0) {
+                return [];
+            }
+        } elseif (in_array($dimension, Dimensions::SESSION_DIMENSIONS, true)) {
+            // Entry/exit page: the first/last pageview of each session.
+            $order = $dimension === 'entry_page' ? 'ASC' : 'DESC';
+            $rows = $this->db->queryForList($cte . ",
+                edge AS (
+                    SELECT DISTINCT ON (sid) sid, visitor_hash, path FROM base
+                    WHERE name = 'pageview' AND sid IN (SELECT sid FROM sessions)
+                    ORDER BY sid, ts $order, id $order
+                )
+                SELECT e.path AS value, count(DISTINCT e.visitor_hash) AS visitors, count(*) AS visits,
+                       count(*) AS pageviews, 0 AS events, count(*) FILTER (WHERE s.n = 1) AS bounces,
+                       round(sum(s.dur)) AS duration_sum
+                FROM edge e JOIN sessions s USING (sid)
+                GROUP BY e.path", $binds);
+        } else {
+            // Counts over matching events; bounces and duration over the
+            // sessions in which the value appears.
+            $column = Dimensions::COLUMNS[$dimension];
+            $none = $dimension === 'source' ? Dimensions::DIRECT : Dimensions::NONE;
+            $onlyEvents = $dimension === 'event' ? "WHERE name <> 'pageview'" : '';
+            $rows = $this->db->queryForList($cte . ",
+                tagged AS (SELECT coalesce($column, ?) AS value, * FROM matched $onlyEvents),
+                counts AS (
+                    SELECT value, count(DISTINCT visitor_hash) AS visitors, count(DISTINCT sid) AS visits,
+                           count(*) FILTER (WHERE name = 'pageview') AS pageviews,
+                           count(*) FILTER (WHERE name <> 'pageview') AS events
+                    FROM tagged GROUP BY value
+                ),
+                quality AS (
+                    SELECT t.value, count(*) FILTER (WHERE s.n = 1) AS bounces, round(sum(s.dur)) AS duration_sum
+                    FROM (SELECT DISTINCT value, sid FROM tagged) t JOIN sessions s USING (sid)
+                    GROUP BY t.value
+                )
+                SELECT c.*, q.bounces, q.duration_sum
+                FROM counts c JOIN quality q USING (value)", [...$binds, $none]);
+        }
+        $result = [];
+        foreach ($rows as $r) {
+            $sums = [];
+            foreach (self::SUMS as $k) {
+                $sums[$k] = (int) $r[$k];
+            }
+            $sums['session_pageviews'] = (int) ($r['session_pageviews'] ?? $r['pageviews']);
+            $result[(string) $r['value']] = $sums;
+        }
+        return $result;
+    }
+
+    /** @return array<string, int> */
+    private static function zero(): array {
+        return array_fill_keys([...self::SUMS, 'session_pageviews'], 0);
+    }
+
+    /**
+     * CTEs shared by every report: base (events in [from, to) outside
+     * $exclude, with session id), matched (events passing the filters) and
+     * sessions (whole sessions that contain a matched event).
+     * @param array{0: \DateTimeImmutable, 1: \DateTimeImmutable}|null $exclude
      * @return array{0: string, 1: list<mixed>}
      */
-    private function baseCte(int $siteId, Period $period, Filters $filters): array {
+    private function cte(int $siteId, \DateTimeImmutable $from, \DateTimeImmutable $to, Filters $filters, ?array $exclude): array {
         [$condition, $filterBinds] = $filters->toSql();
         // Acquisition (source, referrer, UTM) is a session attribute: every event
         // inherits its session's entry values. Otherwise each in-site navigation
@@ -260,11 +335,12 @@ class StatsQuery {
         foreach (['referrer_source', 'referrer_host', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'] as $c) {
             $acquisition .= "first_value($c) OVER entry AS $c, ";
         }
+        $exclude ??= [$from, $from];
         $sql = "WITH raw AS (
                     SELECT id, visitor_hash, coalesce(session_id, id) AS sid, ts, name,
                            path, hostname, referrer_source, referrer_host, utm_source, utm_medium, utm_campaign,
                            utm_term, utm_content, country, region, city, browser, os, device
-                    FROM events WHERE site_id = ? AND ts >= ? AND ts < ?
+                    FROM events WHERE site_id = ? AND ts >= ? AND ts < ? AND NOT (ts >= ? AND ts < ?)
                 ),
                 base AS (
                     SELECT id, visitor_hash, sid, ts, name, path, hostname, $acquisition
@@ -278,6 +354,7 @@ class StatsQuery {
                            extract(epoch FROM max(ts) - min(ts)) AS dur
                     FROM base WHERE sid IN (SELECT sid FROM matched) GROUP BY sid
                 )";
-        return [$sql, [$siteId, $period->start->format('c'), $period->end->format('c'), ...$filterBinds]];
+        return [$sql, [$siteId, $from->format('c'), $to->format('c'),
+            $exclude[0]->format('c'), $exclude[1]->format('c'), ...$filterBinds]];
     }
 }

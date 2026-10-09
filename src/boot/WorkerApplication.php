@@ -15,6 +15,7 @@ use dev\winterframework\stereotype\WinterBootApplication;
     configDirectory: [__DIR__ . '/../../config'],
     scanNamespaces: [
         ['dev\\suvera\\snowprint\\rollup\\', __DIR__ . '/../rollup'],
+        ['dev\\suvera\\snowprint\\query\\', __DIR__ . '/../query'],
         ['dev\\suvera\\snowprint\\privacy\\', __DIR__ . '/../privacy'],
         ['dev\\suvera\\snowprint\\site\\', __DIR__ . '/../site'],
         ['dev\\suvera\\snowprint\\infra\\', __DIR__ . '/../infra'],

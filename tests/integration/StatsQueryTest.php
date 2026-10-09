@@ -5,6 +5,7 @@ namespace dev\suvera\snowprint\tests\integration;
 
 use dev\suvera\snowprint\query\Filters;
 use dev\suvera\snowprint\query\Period;
+use dev\suvera\snowprint\query\RollupService;
 use dev\suvera\snowprint\query\StatsQuery;
 use dev\suvera\snowprint\tests\support\Beans;
 use dev\suvera\snowprint\tests\support\PdoPdbcTemplate;
@@ -32,7 +33,7 @@ final class StatsQueryTest extends TestCase {
             return;
         }
         $pdo = self::$db->pdo;
-        $pdo->exec("DELETE FROM events; DELETE FROM sites WHERE domain = 'stats.test'");
+        $pdo->exec("DELETE FROM events; DELETE FROM rollup_daily; DELETE FROM job_watermarks; DELETE FROM sites WHERE domain = 'stats.test'");
         self::$siteId = (int) $pdo->query("INSERT INTO sites (domain) VALUES ('stats.test') RETURNING id")->fetchColumn();
         $rows = [
             // hash, session, ts, name, path, source, utm_source, browser, device, country
@@ -53,7 +54,8 @@ final class StatsQueryTest extends TestCase {
         if (self::$db === null) {
             self::markTestSkipped('set SNOWPRINT_TEST_DB_URL (tests/integration.sh does)');
         }
-        $this->stats = Beans::inject(new StatsQuery(), 'db', self::$db);
+        $this->stats = Beans::inject(Beans::inject(new StatsQuery(), 'db', self::$db), 'rollups',
+            Beans::inject(new RollupService(), 'db', self::$db));
         $this->week = Period::parse('2026-10-01..2026-10-07', 'UTC');
     }
 

@@ -250,6 +250,17 @@ sessions=$(psql_sp "select string_agg(path, ',' order by ts) from events where p
 [ "$(psql_sp "select count(*) from events where path = '/a1' and session_id = id")" = 1 ] \
     || fail "session id must be the first event's id"
 
+echo "==> Rollups and retention"
+# A pageview three days ago; the worker rolls up finished days, retention keeps
+# 90 days. Reset the watermark: the scheduled job may have started after today's events.
+psql_sp "INSERT INTO events (site_id, ts, visitor_hash, session_id, name, path)
+         VALUES (1, now() - interval '3 days', '\\xcc', 1, 'pageview', '/rolled')" >/dev/null
+psql_sp "DELETE FROM job_watermarks WHERE job LIKE 'rollup:%'" >/dev/null
+console rollup:run | grep -q '"days_rolled_up":[1-9]' || fail "rollup:run rolled up no days"
+[ "$(psql_sp "select visitors from rollup_daily where site_id = 1 and dimension = 'page' and value = '/rolled'")" = 1 ] \
+    || fail "the three-day-old pageview is not rolled up"
+console retention:run | grep -q '"events_deleted":0' || fail "retention:run deleted events inside the retention period"
+
 i=0
 until [ "$(docker inspect -f '{{.State.Health.Status}}' "$APP")" = healthy ]; do
     i=$((i + 1)); [ "$i" -le 60 ] || fail "container never became healthy"; sleep 1
@@ -283,4 +294,4 @@ until curl -s "http://localhost:$PORT/api/system/health" | grep -q '"status":"UP
     i=$((i + 1)); [ "$i" -le 30 ] || fail "/health did not recover after PostgreSQL came back"; sleep 1
 done
 
-echo "PASS: migrated ($partitions events partitions), tracking stored and anonymised, sessions assigned, MCP tools and auth, dashboard app, API and sign-in, Prometheus metrics, everything under /api/, health UP, DOWN and recovered with PostgreSQL, /api/status OK, container healthy"
+echo "PASS: migrated ($partitions events partitions), tracking stored and anonymised, sessions assigned, rollups and retention, MCP tools and auth, dashboard app, API and sign-in, Prometheus metrics, everything under /api/, health UP, DOWN and recovered with PostgreSQL, /api/status OK, container healthy"

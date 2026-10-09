@@ -51,7 +51,7 @@ bolted on: every part of Snowprint maps to a Winter Boot feature.
 |---|---|
 | Tracking and dashboard endpoints | `#[RestController]`, `#[PostMapping]`, `#[RequestBody]` |
 | Batched event writes | `#[Async]` services and `PdbcTemplate::batchUpdate` |
-| Hourly/daily rollups, salt rotation | `#[Scheduled]` jobs with `#[Lockable]` so one worker runs them |
+| Daily rollups, retention, salt rotation | `#[Scheduled]` jobs, safe on several workers (idempotent or advisory locks) |
 | Fast dashboards | `#[Cacheable]` / `#[CacheEvict]` |
 | Sites, goals, users | `#[Transactional]` |
 | Logins and API keys | `HandlerInterceptor` and coroutine-safe `SessionManager` |
@@ -270,6 +270,10 @@ without their arguments. Manage keys with `key:list` and `key:revoke <id>`.
 - Raw IPs and user agents are never written to disk. Only derived values are stored
   (country, browser, device type).
 - The site id is part of the hash, so a visitor cannot be tracked across sites.
+- Raw events are kept for each site's retention period (90 days by default, `0` = forever).
+  Before they are deleted, every finished day is rolled up into daily totals per page,
+  source, country and so on, which are kept. Unfiltered reports keep working for any
+  period; filtered reports and goals need raw events, so they cover the retention period.
 
 ## Development
 
@@ -324,7 +328,7 @@ src/            PHP namespace dev\suvera\snowprint
   infra/        framework wiring in code: #[Configuration] beans, interceptors
   ingest/       /api/event and Matomo tracker endpoints, batching, bot filter, GeoIP
   privacy/      daily salt rotation, visitor hashing
-  rollup/       scheduled hourly/daily aggregation, retention sweeps
+  rollup/       scheduled jobs: sessionizer, daily rollups, retention, partitions
   query/        reporting queries shared by the dashboard and MCP
   web/          dashboard, management API, auth, share links
   mcp/          MCP endpoint and tools

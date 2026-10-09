@@ -13,6 +13,8 @@
 #                                          printed once, store it safely
 #   key:list
 #   key:revoke <id>
+#   rollup:run                            roll up finished days now (the worker does it every 10 min)
+#   retention:run                         delete raw events past retention now (the worker does it hourly)
 #   help
 #
 # It calls the local server's /api/admin endpoints on 127.0.0.1 with the token
@@ -23,7 +25,7 @@ cd "$(dirname "$0")/.."
 BASE="${SNOWPRINT_CONSOLE_URL:-http://127.0.0.1:7669}"
 TOKEN_FILE="var/operator.token"
 
-usage() { sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,21p' "$0" | sed 's/^# \{0,1\}//'; }
 die() { echo "error: $*" >&2; exit 1; }
 
 # Values go inside JSON strings: allow only characters that need no escaping.
@@ -78,6 +80,12 @@ case "$cmd" in
         [ $# -eq 1 ] || die "usage: key:revoke <id>"
         case "$1" in *[!0-9]*) die "id must be a number" ;; esac
         call DELETE "/api/admin/api-keys/$1"
+        ;;
+    rollup:run)
+        call POST /api/admin/jobs/rollup
+        ;;
+    retention:run)
+        call POST /api/admin/jobs/retention
         ;;
     help|-h|--help)
         usage
