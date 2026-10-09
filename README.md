@@ -15,8 +15,9 @@ One PHP container plus Postgres. No cookies. Ask your traffic questions from Cla
 > **Pre-alpha.** Snowprint is in early development and is not usable yet. Follow the
 > [roadmap](#roadmap) or watch the repo for the first release.
 
-**Live demo:** [snowprint.suvera.xyz](https://snowprint.suvera.xyz) *(coming soon: the demo goes
-live with the first release)*. The demo dashboard tracks Snowprint's own site.
+**Live instance:** [snowprint.suvera.xyz/ui](https://snowprint.suvera.xyz/ui/), a real Snowprint
+deployment on Kubernetes tracking the [Winter Boot documentation](https://suvera.github.io/winter-boot/).
+Sign-in is required for now; a public read-only dashboard comes with shareable links.
 
 ![Snowprint dashboard: overview with visitors, visits, pageviews, bounce rate and visit duration, a traffic chart, and top sources, pages, locations and devices](docs/images/dashboard.jpg)
 
