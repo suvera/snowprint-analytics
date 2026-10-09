@@ -43,11 +43,12 @@ final class PdoPdbcTemplate implements PdbcTemplate {
 
     public function queryForScalar(string $sql, array|BindVars $bindVars = []): int|string|float|bool|null {
         // Like Winter Boot's PdoTemplate: no row is an error, not null.
-        $value = $this->run($sql, $bindVars)->fetchColumn();
-        if ($value === false) {
+        // Fetch the row, not the column: a boolean FALSE value is a result too.
+        $row = $this->run($sql, $bindVars)->fetch(\PDO::FETCH_NUM);
+        if ($row === false) {
             throw new \UnexpectedValueException('Incorrect result size: expected 1, actual empty record');
         }
-        return $value;
+        return $row[0];
     }
 
     public function queryForMap(string $sql, array|BindVars $bindVars = []): array {

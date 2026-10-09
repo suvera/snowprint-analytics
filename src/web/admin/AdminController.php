@@ -8,6 +8,7 @@ use dev\suvera\snowprint\query\RetentionService;
 use dev\suvera\snowprint\query\RollupBuilder;
 use dev\suvera\snowprint\query\RollupService;
 use dev\suvera\snowprint\site\ApiKeyService;
+use dev\suvera\snowprint\site\DemoSeeder;
 use dev\suvera\snowprint\site\GoalService;
 use dev\suvera\snowprint\site\InvalidInput;
 use dev\suvera\snowprint\site\ShareLinkService;
@@ -51,6 +52,9 @@ class AdminController {
 
     #[Autowired]
     private PublicUrl $publicUrl;
+
+    #[Autowired]
+    private DemoSeeder $demo;
 
     #[GetMapping(path: '/api/admin/sites')]
     public function listSites(): array {
@@ -161,6 +165,19 @@ class AdminController {
             return $this->shares->delete($site['id'], $id)
                 ? ResponseEntity::ok(['deleted' => $id])
                 : ResponseEntity::notFound()->withJson(['error' => 'no share link with id ' . $id . ' on ' . $site['domain']]);
+        });
+    }
+
+    /** Body: {"days": 35}. Fills an empty site with synthetic demo traffic (SP-040). */
+    #[PostMapping(path: '/api/admin/sites/{domain}/demo-data')]
+    public function seedDemo(HttpRequest $request, #[PathVariable] string $domain): ResponseEntity {
+        return self::guard(function () use ($request, $domain) {
+            $site = $this->sites->findByDomain($domain) ?? throw new InvalidInput('unknown site: ' . $domain);
+            $days = filter_var(self::json($request)['days'] ?? 35, FILTER_VALIDATE_INT);
+            if ($days === false) {
+                throw new InvalidInput('days must be a whole number');
+            }
+            return ResponseEntity::ok(['demo_data' => $this->demo->seed($site['id'], $days)]);
         });
     }
 

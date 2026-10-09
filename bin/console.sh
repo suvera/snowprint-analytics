@@ -20,6 +20,8 @@
 #                                          printed once
 #   share:list <domain>
 #   share:delete <domain> <id>
+#   demo:seed <domain> [days]             fill an EMPTY site with synthetic demo traffic
+#                                          (default 35 days; for trying Snowprint out)
 #   rollup:run                            roll up finished days now (the worker does it every 10 min)
 #   retention:run                         delete raw events past retention now (the worker does it hourly)
 #   help
@@ -32,7 +34,7 @@ cd "$(dirname "$0")/.."
 BASE="${SNOWPRINT_CONSOLE_URL:-http://127.0.0.1:7669}"
 TOKEN_FILE="var/operator.token"
 
-usage() { sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'; }
 die() { echo "error: $*" >&2; exit 1; }
 
 # Values go inside JSON strings: allow only characters that need no escaping.
@@ -111,6 +113,12 @@ case "$cmd" in
         [ $# -eq 2 ] || die "usage: share:delete <domain> <id>"
         case "$2" in *[!0-9]*) die "id must be a number" ;; esac
         call DELETE "/api/admin/sites/$(safe "$1")/shares/$2"
+        ;;
+    demo:seed)
+        [ $# -ge 1 ] || die "usage: demo:seed <domain> [days]"
+        days="${2:-35}"
+        case "$days" in ''|*[!0-9]*) die "days must be a number" ;; esac
+        call POST "/api/admin/sites/$(safe "$1")/demo-data" "{\"days\":$days}"
         ;;
     rollup:run)
         call POST /api/admin/jobs/rollup

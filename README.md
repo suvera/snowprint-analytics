@@ -212,6 +212,9 @@ docker exec snowprint bin/console.sh site:set example.com retention 365  # raw e
 docker exec snowprint bin/console.sh help
 ```
 
+To look around before you have traffic, `bin/console.sh demo:seed demo.example 35` fills a
+new, empty site with 35 days of synthetic visits (it refuses sites that have data).
+
 A site's **Settings** page changes its timezone and raw-event retention (default 90 days), shows
 the snippet, and deletes the site with its data. New sites start receiving events within 30 seconds. Then add this to every page
 (Snowprint serves the tracker itself):
