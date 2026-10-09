@@ -1,0 +1,75 @@
+{
+    "name": "suvera/snowprint-analytics",
+    "description": "Self-hosted, privacy-first web analytics with a built-in MCP server, built on the Winter Boot framework for PHP 8.5.",
+    "type": "project",
+    "license": "MIT",
+    "keywords": [
+        "analytics",
+        "web-analytics",
+        "privacy",
+        "self-hosted",
+        "mcp",
+        "matomo",
+        "swoole",
+        "winter-boot"
+    ],
+    "homepage": "https://github.com/suvera/snowprint-analytics",
+    "authors": [
+        {
+            "name": "Suvera",
+            "homepage": "https://github.com/suvera"
+        }
+    ],
+    "repositories": [
+        {
+            "type": "path",
+            "url": "../winter-boot"
+        }
+    ],
+    "require": {
+        "php": ">=8.5",
+        "ext-pcntl": "*",
+        "ext-pdo": "*",
+        "ext-pdo_pgsql": "*",
+        "ext-posix": "*",
+        "ext-sodium": "*",
+        "ext-swoole": "*",
+        "matomo/device-detector": "^6.4",
+        "maxmind-db/reader": "^1.12",
+        "suvera/winter-boot": "*@dev"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^12.0"
+    },
+    "suggest": {
+        "ext-redis": "Redis tier: realtime counters, HyperLogLog uniques, distributed rollup lock",
+        "ext-rdkafka": "Kafka tier: ingest buffer between ingest and worker replicas",
+        "suvera/winter-modules": "Redis, Kafka and OpenSearch scaling tiers"
+    },
+    "autoload": {
+        "psr-4": {
+            "dev\\suvera\\snowprint\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "dev\\suvera\\snowprint\\tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "config": {
+        "sort-packages": true,
+        "optimize-autoloader": true,
+        "allow-plugins": {
+            "php-http/discovery": true,
+            "tbachert/spi": true
+        }
+    },
+    "scripts": {
+        "serve": "php bin/snowprint serve",
+        "test": "phpunit",
+        "test:tracker": "node --test tests/tracker/snow.test.mjs",
+        "test:ui": "cd ui && npm test"
+    }
+}

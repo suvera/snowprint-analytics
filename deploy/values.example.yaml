@@ -1,0 +1,53 @@
+# Snowprint Helm values for one installation.
+
+# Kubernetes namespace (read by deploy/deploy.sh and deploy/uninstall.sh;
+# the NAMESPACE environment variable overrides it).
+namespace: snowprint
+
+#   cp deploy/values.example.yaml deploy/values.local.yaml
+# deploy/values.local.yaml is git-ignored: it holds your hostnames and may hold
+# a database password. Full reference: deploy/helm/values.yaml.
+
+image:
+  repository: suvera/snowprint
+  tag: "0.1.0-dev"            # what docker/build.sh tagged (or your registry's tag)
+  pullPolicy: IfNotPresent
+
+# single: one Deployment for everything; split: web / ingest / worker scale separately.
+mode: single
+
+database:
+  # Your PostgreSQL 15+, reachable from the cluster.
+  url: "pgsql:host=postgres.example.internal;port=5432;dbname=snowprint"
+  user: snowprint
+  # Prefer an existing Secret:
+  #   kubectl -n snowprint create secret generic snowprint-db --from-literal=password='...'
+  existingSecret: snowprint-db
+  existingSecretPasswordKey: password
+  # Or let the chart create the Secret (then leave existingSecret empty):
+  # password: "change-me"
+
+# Debugging aids (both default to false):
+# requestTrace: true        # one TRACE log line per request
+# jsonPrettyPrint: true     # indented JSON responses
+
+# Public tracking URL used in snippets (defaults to the dashboard's address).
+# A different host is added to the Ingress for the tracker paths.
+# publicUrl: "https://stats.example.com"
+
+ingress:
+  enabled: true
+  className: nginx
+  host: stats.example.com
+  tls:
+    enabled: true
+    secretName: snowprint-tls
+  # annotations:
+  #   cert-manager.io/cluster-issuer: letsencrypt
+
+# Countries/regions/cities. Easiest: download DB-IP Lite when pods start.
+# geoip:
+#   download: dbip-city-lite           # or dbip-country-lite
+# Or your own file on a PVC:
+#   existingClaim: snowprint-geoip
+#   file: dbip-city-lite.mmdb

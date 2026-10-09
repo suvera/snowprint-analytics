@@ -1,0 +1,17 @@
+.git
+.github
+.idea
+.vscode
+vendor
+var
+tests
+bench
+docs
+coverage
+.env
+*.log
+*.mmdb
+tracker/node_modules
+*.phar
+ui/node_modules
+public/ui

@@ -1,0 +1,123 @@
+# Snowprint configuration, read by both the app (bin/server.php) and the
+# Winter Boot SQL migrator (migrations/run.sh). Values written as
+# "$env.NAME || default" can be overridden with environment variables.
+
+propertySources:
+  - name: env
+    provider: dev\winterframework\io\EnvPropertySource
+
+server:
+  address: 0.0.0.0
+  # S-N-O-W on a phone keypad. Publish a different host port with docker run -p.
+  port: 7669
+  context-path: /
+  swoole:
+    reactor_num: 2
+    worker_num: 4
+    task_enable_coroutine: true
+    task_use_object: true
+    backlog: 1024       # ingest bursts: larger accept queue than the usual 128
+    dispatch_mode: 1
+    hook_flags: SWOOLE_HOOK_ALL   # coroutine-friendly PDO, so one worker serves many requests
+    # Swoole serves these straight from public/ without PHP: the tracker
+    # (/snow.js) and the dashboard (React app in public/ui/, decision D10).
+    enable_static_handler: true
+    document_root: public
+    static_handler_locations: [/snow.js, /ui]
+    http_index_files: [index.html]
+
+winter:
+  application:
+    name: snowprint
+    id: snowprint
+    version: 0.1.0-dev
+  web:
+    request:
+      # Log "TRACE START/FINISH <method> <uri> -> <status> (<ms> ms)" for every request.
+      enableTrace: $env.SNOWPRINT_REQUEST_TRACE || false
+    json:
+      # Indent JSON responses (handy when reading the API with curl).
+      prettyPrint: $env.SNOWPRINT_JSON_PRETTY || false
+  task:
+    async:
+      poolSize: 4
+      queueCapacity: 10000
+      argsSize: 2048
+    scheduling:
+      poolSize: 2
+      queueCapacity: 100
+  coroutine:
+    db:
+      # Postgres connections per worker process; keep
+      # worker_num x maxConnections below Postgres max_connections (100).
+      maxConnections: 10
+      maxWaitMs: 5000
+  prometheus:
+    # APCu: shared by every worker in the container, no network round-trips.
+    # Without APCu (local development) set SNOWPRINT_METRICS_STORE to
+    # dev\winterframework\io\metrics\prometheus\NoAdapter.
+    beanClass: $env.SNOWPRINT_METRICS_STORE || Prometheus\Storage\APC
+  security:
+    unserialize:
+      allowedClasses: []
+
+datasource:
+  - name: analytics
+    isPrimary: true
+    url: $env.SNOWPRINT_DB_URL || pgsql:host=127.0.0.1;port=5432;dbname=snowprint
+    username: $env.SNOWPRINT_DB_USER || snowprint
+    password: $env.SNOWPRINT_DB_PASSWORD || snowprint
+    validationQuery: SELECT 1
+    driverClass: dev\winterframework\pdbc\pdo\PdoDataSource
+    connection:
+      persistent: false
+      errorMode: ERRMODE_EXCEPTION
+      autoCommit: true
+      idleTimeout: 180    # recycle idle connections in long-running workers
+      schema: public
+    migrations:
+      enabled: true
+      useCli: true        # migration files run through psql (ON_ERROR_STOP=1)
+
+snowprint:
+  # Public base URL that tracked websites load /snow.js from and send events to,
+  # e.g. https://stats.example.com. Shown in the dashboard's tracking snippet.
+  # Empty: the address the dashboard is opened on.
+  publicUrl: $env.SNOWPRINT_PUBLIC_URL || ''
+  ingest:
+    # Take the client IP from proxy headers: CF-Connecting-IP, then the leftmost
+    # X-Forwarded-For, then X-Real-IP (else the socket). Enable only behind a proxy
+    # that sets them (Cloudflare Tunnel, ingress, nginx); otherwise they can be forged.
+    trustProxy: $env.SNOWPRINT_TRUST_PROXY || false
+    # Drop events from browsers that send "DNT: 1".
+    respectDnt: $env.SNOWPRINT_RESPECT_DNT || true
+    # DEBUGGING ONLY: log every tracker request's client IP and the proxy headers
+    # it was resolved from. Raw IPs in logs break Snowprint's privacy promise:
+    # turn it off again once the proxy setup is verified.
+    logClientIp: $env.SNOWPRINT_LOG_CLIENT_IP || false
+  ui:
+    # Mark the dashboard session cookie Secure. Set true when served over HTTPS.
+    secureCookies: $env.SNOWPRINT_SECURE_COOKIES || false
+  geoip:
+    # Path to a MaxMind-format .mmdb file (DB-IP Lite City or GeoLite2 City).
+    # Empty: no country/region/city.
+    database: $env.SNOWPRINT_GEOIP_DB || ''
+    # Credit shown in the dashboard; set automatically for DB-IP downloads
+    # (CC BY 4.0 requires "IP Geolocation by DB-IP" with a link).
+    attribution: $env.SNOWPRINT_GEOIP_ATTRIBUTION || ''
+    attributionUrl: $env.SNOWPRINT_GEOIP_ATTRIBUTION_URL || ''
+
+management:
+  endpoints:
+    enabled: true
+  endpoint:
+    # Ops endpoints live under /api/system/ like every other backend path.
+    health:
+      enabled: true
+      path: api/system/health
+    info:
+      enabled: true
+      path: api/system/info
+    prometheus:
+      enabled: true     # counts only, no personal data
+      path: api/system/prometheus

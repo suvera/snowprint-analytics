@@ -1,0 +1,47 @@
+{{- if .Values.migrations.enabled }}
+# Applies database migrations once per install/upgrade, before new pods start
+# (pods run with SNOWPRINT_SKIP_MIGRATIONS so replicas never race).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "snowprint.fullname" . }}-migrate
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "snowprint.labels" . | nindent 4 }}
+    app.kubernetes.io/component: migrate
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "0"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: {{ .Values.migrations.backoffLimit }}
+  activeDeadlineSeconds: {{ .Values.migrations.activeDeadlineSeconds }}
+  template:
+    metadata:
+      labels:
+        {{- include "snowprint.labels" . | nindent 8 }}
+        app.kubernetes.io/component: migrate
+    spec:
+      restartPolicy: Never
+      securityContext:
+        {{- include "snowprint.podSecurity" . | nindent 8 }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: migrate
+          image: {{ include "snowprint.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: [migrate]
+          env:
+            {{- include "snowprint.env" . | nindent 12 }}
+          securityContext:
+            {{- include "snowprint.containerSecurity" . | nindent 12 }}
+          volumeMounts:
+            - { name: var, mountPath: /app/var }
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - { name: var, emptyDir: {} }
+        - { name: tmp, emptyDir: {} }
+{{- end }}

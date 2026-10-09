@@ -1,0 +1,17 @@
+Snowprint {{ .Chart.AppVersion }} is deployed ({{ .Values.mode }} mode) in namespace {{ .Release.Namespace }}.
+
+{{- if .Values.ingress.enabled }}
+
+Dashboard:  http{{ if .Values.ingress.tls.enabled }}s{{ end }}://{{ .Values.ingress.host }}/ui/
+Tracker:    <script defer src="{{ if .Values.publicUrl }}{{ trimSuffix "/" .Values.publicUrl }}{{ else }}http{{ if .Values.ingress.tls.enabled }}s{{ end }}://{{ .Values.ingress.host }}{{ end }}/snow.js" data-domain="example.com"></script>
+MCP:        http{{ if .Values.ingress.tls.enabled }}s{{ end }}://{{ .Values.ingress.host }}/api/mcp
+{{- else }}
+
+No ingress is enabled. Try it with a port-forward:
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "snowprint.fullname" . }}-{{ ternary "web" "all" (eq .Values.mode "split") }} 7669:{{ .Values.service.port }}
+  open http://localhost:7669/ui/
+{{- end }}
+
+The first visitor of the dashboard creates the admin account.
+Operator console:
+  kubectl -n {{ .Release.Namespace }} exec deploy/{{ include "snowprint.fullname" . }}-{{ ternary "web" "all" (eq .Values.mode "split") }} -- bin/console.sh help

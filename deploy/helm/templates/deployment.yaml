@@ -1,0 +1,96 @@
+{{- range $role, $replicas := include "snowprint.roles" . | fromYaml }}
+{{- $name := printf "%s-%s" (include "snowprint.fullname" $) $role }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "snowprint.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $role }}
+spec:
+  {{- if not (and (eq $role "ingest") $.Values.split.ingest.autoscaling.enabled) }}
+  replicas: {{ $replicas }}
+  {{- end }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ $.Chart.Name }}
+      app.kubernetes.io/instance: {{ $.Release.Name }}
+      app.kubernetes.io/component: {{ $role }}
+  template:
+    metadata:
+      labels:
+        {{- include "snowprint.labels" $ | nindent 8 }}
+        app.kubernetes.io/component: {{ $role }}
+      {{- with $.Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      securityContext:
+        {{- include "snowprint.podSecurity" $ | nindent 8 }}
+      {{- with $.Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      # Swoole drains in-flight requests and flushes the event buffer on SIGTERM.
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: snowprint
+          image: {{ include "snowprint.image" $ | quote }}
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
+          args: [{{ $role | quote }}]
+          ports:
+            - name: http
+              containerPort: 7669
+          env:
+            {{- include "snowprint.env" $ | nindent 12 }}
+            - name: SNOWPRINT_SKIP_MIGRATIONS
+              value: {{ $.Values.migrations.enabled | quote }}
+          startupProbe:
+            httpGet: { path: /api/status, port: http }
+            periodSeconds: 2
+            # Up to 5 minutes when the GeoIP database is downloaded at start-up.
+            failureThreshold: {{ if $.Values.geoip.download }}150{{ else }}30{{ end }}
+          # Liveness must not depend on PostgreSQL, or an outage restarts every pod.
+          livenessProbe:
+            httpGet: { path: /api/status, port: http }
+            periodSeconds: 15
+            failureThreshold: 3
+          readinessProbe:
+            httpGet: { path: /api/system/health, port: http }
+            periodSeconds: 10
+            failureThreshold: 2
+          resources:
+            {{- toYaml $.Values.resources | nindent 12 }}
+          securityContext:
+            {{- include "snowprint.containerSecurity" $ | nindent 12 }}
+          volumeMounts:
+            - { name: var, mountPath: /app/var }
+            - { name: tmp, mountPath: /tmp }
+            {{- if $.Values.geoip.existingClaim }}
+            - { name: geoip, mountPath: /geo, readOnly: true }
+            {{- end }}
+      volumes:
+        - { name: var, emptyDir: {} }
+        - { name: tmp, emptyDir: {} }
+        {{- if $.Values.geoip.existingClaim }}
+        - name: geoip
+          persistentVolumeClaim:
+            claimName: {{ $.Values.geoip.existingClaim }}
+            readOnly: true
+        {{- end }}
+      {{- with $.Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $.Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $.Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

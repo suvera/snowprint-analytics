@@ -1,0 +1,17 @@
+* text=auto eol=lf
+
+*.php   text diff=php
+*.sh    text eol=lf
+bin/*   text eol=lf
+*.png   binary
+*.jpg   binary
+*.gif   binary
+*.mmdb  binary
+
+/tests          export-ignore
+/bench          export-ignore
+/docs           export-ignore
+/AGENTS.md      export-ignore
+/CLAUDE.md      export-ignore
+/.github        export-ignore
+/phpunit.xml    export-ignore

@@ -1,0 +1,59 @@
+{{- if .Values.ingress.enabled }}
+{{- $full := include "snowprint.fullname" . }}
+{{- $main := ternary (printf "%s-web" $full) (printf "%s-all" $full) (eq .Values.mode "split") }}
+{{- $ingest := ternary (printf "%s-ingest" $full) (printf "%s-all" $full) (eq .Values.mode "split") }}
+{{- $publicHost := "" }}
+{{- if .Values.publicUrl }}
+{{- $publicHost = (urlParse .Values.publicUrl).host | splitList ":" | first }}
+{{- end }}
+{{- $extraHost := and $publicHost (ne $publicHost .Values.ingress.host) }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ $full }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "snowprint.labels" . | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+    - hosts: [{{ .Values.ingress.host | quote }}{{ if $extraHost }}, {{ $publicHost | quote }}{{ end }}]
+      secretName: {{ .Values.ingress.tls.secretName }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.ingress.host | quote }}
+      http:
+        paths:
+          # Tracker traffic goes to the ingest role (the same pods in single mode).
+          - path: /api/event
+            pathType: Prefix
+            backend: { service: { name: {{ $ingest }}, port: { name: http } } }
+          - path: /snow.js
+            pathType: Exact
+            backend: { service: { name: {{ $ingest }}, port: { name: http } } }
+          - path: /api
+            pathType: Prefix
+            backend: { service: { name: {{ $main }}, port: { name: http } } }
+          - path: /ui
+            pathType: Prefix
+            backend: { service: { name: {{ $main }}, port: { name: http } } }
+    {{- if $extraHost }}
+    # Separate public tracking host (publicUrl): only the tracker paths.
+    - host: {{ $publicHost | quote }}
+      http:
+        paths:
+          - path: /api/event
+            pathType: Prefix
+            backend: { service: { name: {{ $ingest }}, port: { name: http } } }
+          - path: /snow.js
+            pathType: Exact
+            backend: { service: { name: {{ $ingest }}, port: { name: http } } }
+    {{- end }}
+{{- end }}

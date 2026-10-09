@@ -1,0 +1,49 @@
+# Composer
+/vendor/
+composer.phar
+
+# Local working documents (not published)
+/TASKS.md
+/docs/PRD.md
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Runtime output (logs, pid files, local kv/queue data, sessions)
+/var/
+*.log
+*.pid
+
+# Build artifacts
+/build/out/
+*.phar
+/public/ui/
+/ui/node_modules/
+/tracker/node_modules/
+node_modules/
+
+# GeoIP databases (user-supplied, licensed separately)
+*.mmdb
+
+# Tests and tooling
+/.phpunit.cache/
+.phpunit.result.cache
+/coverage/
+/bench/results/
+.php-cs-fixer.cache
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+/ui/*.tsbuildinfo
+
+# Helm values for a real installation (hostnames, maybe a password)
+/deploy/values.local.yaml

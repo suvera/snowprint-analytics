@@ -1,0 +1,23 @@
+{{- range $role, $replicas := include "snowprint.roles" . | fromYaml }}
+{{- if ne $role "worker" }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "snowprint.fullname" $ }}-{{ $role }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "snowprint.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $role }}
+spec:
+  type: {{ $.Values.service.type }}
+  selector:
+    app.kubernetes.io/name: {{ $.Chart.Name }}
+    app.kubernetes.io/instance: {{ $.Release.Name }}
+    app.kubernetes.io/component: {{ $role }}
+  ports:
+    - name: http
+      port: {{ $.Values.service.port }}
+      targetPort: http
+{{- end }}
+{{- end }}

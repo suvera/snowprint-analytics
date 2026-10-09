@@ -1,0 +1,22 @@
+/** The Snowprint mark (same artwork as public/favicon.svg), inline so it never flashes. */
+export function Logo({ size = 26, className }: { size?: number; className?: string }) {
+  return (
+    <svg className={className} width={size} height={size} viewBox="0 0 64 64" aria-hidden="true">
+      <rect width="64" height="64" rx="14" fill="#2a78d6" />
+      <g fill="#fff">
+        <g transform="rotate(-14 22 40)">
+          <ellipse cx="22" cy="41" rx="7.5" ry="12" />
+          <circle cx="17" cy="25" r="2.6" />
+          <circle cx="22.5" cy="23.6" r="2.6" />
+          <circle cx="28" cy="25" r="2.6" />
+        </g>
+        <g transform="rotate(14 42 28)" opacity="0.72">
+          <ellipse cx="42" cy="31" rx="7.5" ry="12" />
+          <circle cx="37" cy="15" r="2.6" />
+          <circle cx="42.5" cy="13.6" r="2.6" />
+          <circle cx="48" cy="15" r="2.6" />
+        </g>
+      </g>
+    </svg>
+  );
+}
