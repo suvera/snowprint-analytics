@@ -3,6 +3,7 @@
 **Self-hosted, privacy-first web analytics with a built-in MCP server, built on [Winter Boot](https://github.com/suvera/winter-boot).**
 One PHP container plus Postgres. No cookies. Ask your traffic questions from Claude.
 
+[![CI](https://github.com/suvera/snowprint-analytics/actions/workflows/ci.yml/badge.svg)](https://github.com/suvera/snowprint-analytics/actions/workflows/ci.yml)
 [![Built on Winter Boot](https://img.shields.io/badge/built%20on-Winter%20Boot-1f6feb)](https://github.com/suvera/winter-boot)
 [![PHP 8.5](https://img.shields.io/badge/PHP-8.5-777bb4)](https://www.php.net/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
@@ -327,7 +328,9 @@ export SNOWPRINT_DB_USER=snowprint SNOWPRINT_DB_PASSWORD='your-password'
 ```
 
 `tests/e2e.sh` checks the whole Install section end to end in Docker, using a throwaway
-PostgreSQL container.
+PostgreSQL container. CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs these
+same scripts on every push and pull request: unit and integration tests, the tracker and
+dashboard tests, `tests/e2e.sh` on PostgreSQL 15 and 18, and `tests/helm-e2e.sh`.
 
 Dashboard development (Node 18+): `cd ui && npm ci && npm run dev` serves the React app
 with hot reload on http://localhost:5173/ui/ and proxies `/api` to a Snowprint running on

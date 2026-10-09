@@ -1,0 +1,82 @@
+# Continuous integration (SP-042): the same scripts a contributor runs locally.
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    name: PHP unit and integration tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          extensions: swoole, pdo_pgsql, pgsql, sodium, pcntl, posix
+          tools: composer:v2
+          coverage: none
+      - name: Composer install
+        run: composer install --no-interaction --no-progress --prefer-dist
+      - name: Unit tests
+        run: composer test
+        env:
+          # Prometheus metrics need APCu inside the image; unit tests use the no-op store.
+          SNOWPRINT_METRICS_STORE: 'dev\winterframework\io\metrics\prometheus\NoAdapter'
+      - name: Integration tests (throwaway PostgreSQL 18)
+        run: tests/integration.sh
+
+  ui:
+    name: Dashboard and tracker
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - name: Tracker tests (incl. the 1.5 KB gzip budget)
+        run: node --test tests/tracker/snow.test.mjs
+      - name: Dashboard install
+        run: npm ci --no-audit --no-fund
+        working-directory: ui
+      - name: Dashboard type check and tests
+        run: npm run typecheck && npm test
+        working-directory: ui
+
+  e2e:
+    name: Documented install (PostgreSQL ${{ matrix.postgres }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        postgres: ['15', '18']
+    steps:
+      - uses: actions/checkout@v4
+      - name: tests/e2e.sh
+        run: tests/e2e.sh
+        env:
+          E2E_PG_IMAGE: postgres:${{ matrix.postgres }}-alpine
+
+  helm:
+    name: Helm chart on kind
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      - name: Install kind and kubectl (the test creates its own cluster)
+        uses: helm/kind-action@v1
+        with:
+          install_only: true
+      - name: tests/helm-e2e.sh
+        run: tests/helm-e2e.sh
