@@ -28,6 +28,8 @@ limited to 2 CPUs on the same host, 30 s runs. Every accepted event was stored.
 | own image | 6,000/s | 5,857/s | 0 | 0.22 ms | 19.2 ms | 110.9 ms |
 | own image, **no CPU limit** | 6,000/s | 5,933/s | 0 | 0.21 ms | 13.2 ms | 24.0 ms |
 | Winter Boot 2.1.2, metrics, UA parser warmed at worker start | 10,000/s | 9,815/s | 0 | 0.23 ms | **2.9 ms** | 19.3 ms |
+| `591a251` (Winter Boot 2.1.3 from Packagist) | 10,000/s | 9,855/s | 0 | 0.25 ms | 4.6 ms | 29.6 ms |
+| `591a251`, **4 CPUs** (app and PostgreSQL) | 20,000/s | 19,756/s | 0 | 0.54 ms | 8.5 ms | 13.3 ms |
 
 - The default load uses ~100 real-shaped user agents: real traffic is dominated by a few
   hundred, and parse results are cached per worker. `UNIQUE_UA=1` defeats that cache

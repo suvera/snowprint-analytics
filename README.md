@@ -35,8 +35,8 @@ deployment on Kubernetes tracking the [Winter Boot documentation](https://suvera
   (Desktop or Code) or any MCP client can query your analytics with a scoped API key.
 - **Built on Winter Boot.** Long-running, Spring-Boot-style PHP services: dependency
   injection, REST controllers, scheduling, sessions, migrations, metrics and health
-  checks all come from the framework. Target: 10,000+ events/s on 2 vCPUs, with
-  a reproducible benchmark in the repo.
+  checks all come from the framework. Measured: ~9,900 events/s on 2 CPUs and ~19,800 on
+  4, every event stored ([benchmark](#performance)).
 - **Leave Matomo without losing your data** (planned for v1.0). Matomo tracker
   compatibility, an importer, and an honest list of what does not carry over.
 - **Microservices by heart.** One image, three roles (`web`, `ingest`, `worker`; an
@@ -66,6 +66,23 @@ tiers through Winter Boot modules switched on in `application.yml`.
 If you want to see how a Winter Boot service is structured end to end, this repo is
 meant to be a readable example. Reusable pieces (the ingest buffer) are candidates to
 upstream into Winter Boot.
+
+## Performance
+
+`bench/run.sh` runs PostgreSQL 18 and the Snowprint image in Docker on one machine, as the
+Install section describes, and sends realistic tracker events with [k6](https://k6.io) at a
+fixed rate for 30 seconds. Afterwards it checks that every accepted event was stored.
+
+| CPUs (app / PostgreSQL) | Offered | Accepted | Failed | Stored | Median | p95 | p99 |
+|---|---|---|---|---|---|---|---|
+| 2 / 2 | 10,000/s | 9,855/s | 0 | 100 % | 0.25 ms | 4.6 ms | 29.6 ms |
+| 4 / 4 | 20,000/s | 19,756/s | 0 | 100 % | 0.54 ms | 8.5 ms | 13.3 ms |
+
+Intel Core Ultra 9 285, 50 GB RAM, Docker in WSL2; containers limited with `--cpus`; 4 Swoole
+workers; Snowprint `591a251`. Latency is measured by the client over loopback. The offered
+rate is the target; k6 itself did not start about 1 % of the iterations on time
+(`dropped_iterations`), so "Accepted" counts the requests actually sent, none of which failed.
+Method, older runs and caveats (CPU quotas, unique user agents): [`bench/README.md`](bench/README.md).
 
 ## How it compares
 
