@@ -4,6 +4,7 @@ import type { Filters } from './api';
 // Hash routes keep the dashboard a set of static files (served by Swoole):
 //   #/            sites            #/login, #/setup
 //   #/site/example.com?period=7d&metric=visitors&f.country=DE
+//   #/share/<token>/pages   a public share link (read-only, no account)
 // Report state lives in the URL, so every view is shareable and bookmarkable.
 
 export interface Route {

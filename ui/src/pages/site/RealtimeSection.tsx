@@ -3,7 +3,7 @@ import { api, type Realtime } from '../../api';
 import { formatFull } from '../../format';
 
 /** Visitors and their pages in the last 5 minutes, refreshed every 15 seconds. */
-export function RealtimeSection({ site }: { site: string }) {
+export function RealtimeSection({ site, share }: { site: string; share?: string }) {
   const [data, setData] = useState<Realtime | null>(null);
   const [updated, setUpdated] = useState<Date | null>(null);
 
@@ -12,12 +12,12 @@ export function RealtimeSection({ site }: { site: string }) {
     const load = () => {
       controller.abort();
       controller = new AbortController();
-      api.realtime(site, controller.signal).then((r) => { setData(r); setUpdated(new Date()); }).catch(() => undefined);
+      api.realtime(site, controller.signal, share).then((r) => { setData(r); setUpdated(new Date()); }).catch(() => undefined);
     };
     load();
     const timer = window.setInterval(load, 15_000);
     return () => { window.clearInterval(timer); controller.abort(); };
-  }, [site]);
+  }, [site, share]);
 
   const max = Math.max(1, ...(data?.pages ?? []).map((p) => p.visitors));
   return (

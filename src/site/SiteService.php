@@ -96,6 +96,12 @@ class SiteService {
     }
 
     /** @return array{id: int, domain: string, timezone: string, retention_days: int}|null */
+    public function find(int $siteId): ?array {
+        $row = $this->db->queryForList('SELECT id, domain, timezone, retention_days FROM sites WHERE id = ?', [$siteId])[0] ?? null;
+        return $row === null ? null : self::row($row);
+    }
+
+    /** @return array{id: int, domain: string, timezone: string, retention_days: int}|null */
     public function findByDomain(string $domain): ?array {
         try {
             $domain = self::normalizeDomain($domain);
@@ -118,16 +124,12 @@ class SiteService {
         if ($retentionDays !== null) {
             $this->db->update('UPDATE sites SET retention_days = ? WHERE id = ?', [self::retentionDays($retentionDays), $siteId]);
         }
-        $row = $this->db->queryForList('SELECT id, domain, timezone, retention_days FROM sites WHERE id = ?', [$siteId])[0] ?? null;
-        if ($row === null) {
-            throw new InvalidInput('unknown site');
-        }
-        return self::row($row);
+        return $this->find($siteId) ?? throw new InvalidInput('unknown site');
     }
 
     /**
      * Deletes a site with all its data: raw events, rollups, goals, user and
-     * API key grants. Events that ingest still accepts in the next seconds
+     * API key grants, share links. Events that ingest still accepts in the next seconds
      * (it caches the site list) are removed by the retention job.
      */
     public function delete(int $siteId): void {

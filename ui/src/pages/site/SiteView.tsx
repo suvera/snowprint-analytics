@@ -32,31 +32,33 @@ interface Props {
   sectionId?: string;
   params: URLSearchParams;
   publicUrl: string;
-  user: User;
+  user?: User;               // absent for share-link visitors
+  share?: string;            // share-link token: read-only view, routes under #/share/<token>
   onSitesChanged: () => void;
 }
 
 /** One site: header (period, filters, live visitors, snippet) and the chosen section. */
-export function SiteView({ site, siteInfo, sectionId, params, publicUrl, user, onSitesChanged }: Props) {
-  const canManage = siteInfo?.can_manage ?? false;
+export function SiteView({ site, siteInfo, sectionId, params, publicUrl, user, share, onSitesChanged }: Props) {
+  const canManage = !share && (siteInfo?.can_manage ?? false);
+  const base = share ? `share/${share}` : `site/${encodeURIComponent(site)}`;
   const found = findSection(sectionId);
   const current = found.manage && !canManage ? findSection('overview') : found;
   const isReport = current.id !== 'realtime' && current.id !== 'settings';
   const period = params.get('period') || '7d';
   const filters = filtersFrom(params);
   const filterKey = JSON.stringify(filters);
-  const report: ReportParams = useMemo(() => ({ site, period, filters }), [site, period, filterKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const report: ReportParams = useMemo(() => ({ site, period, filters, share }), [site, period, filterKey, share]); // eslint-disable-line react-hooks/exhaustive-deps
   const [showSnippet, setShowSnippet] = useState(false);
 
   const ctx: SiteContext = {
     site, report, params,
-    go: (next, id = current.id) => navigate(`site/${encodeURIComponent(site)}/${id}`, next),
-    filter: (dimension, value) => navigate(`site/${encodeURIComponent(site)}/${current.id}`, withFilter(params, dimension, value)),
+    go: (next, id = current.id) => navigate(`${base}/${id}`, next),
+    filter: (dimension, value) => navigate(`${base}/${current.id}`, withFilter(params, dimension, value)),
     href: (id, extra = {}) => {
       const next = new URLSearchParams(params);
       next.delete('tab');
       for (const [k, v] of Object.entries(extra)) next.set(k, v);
-      return `#/site/${encodeURIComponent(site)}/${id}${next.toString() ? `?${next}` : ''}`;
+      return `#/${base}/${id}${next.toString() ? `?${next}` : ''}`;
     },
   };
 
@@ -68,8 +70,8 @@ export function SiteView({ site, siteInfo, sectionId, params, publicUrl, user, o
           <span className="muted">{site}</span>
         </div>
         <span className="spacer" />
-        <LiveVisitors site={site} />
-        {current.id !== 'settings' && (
+        <LiveVisitors site={site} share={share} />
+        {current.id !== 'settings' && !share && (
           <button className="btn" onClick={() => setShowSnippet((s) => !s)} aria-expanded={showSnippet}>Tracking snippet</button>
         )}
       </header>
@@ -93,7 +95,7 @@ export function SiteView({ site, siteInfo, sectionId, params, publicUrl, user, o
         </div>
       )}
 
-      {current.id === 'overview' && siteInfo?.has_data === false && !showSnippet && (
+      {current.id === 'overview' && siteInfo?.has_data === false && !showSnippet && !share && (
         <section className="card notice-card" style={{ marginBottom: 16 }} aria-label="Getting started">
           <strong>Waiting for the first visit to {site}.</strong> Add this to the <code>&lt;head&gt;</code> of
           every page, then open your site in a browser (localhost is not tracked):
@@ -107,10 +109,10 @@ export function SiteView({ site, siteInfo, sectionId, params, publicUrl, user, o
       {current.id === 'overview' && <OverviewSection ctx={ctx} />}
       {current.tabs && <DimensionSection key={current.id} ctx={ctx} section={current} />}
       {current.id === 'events' && <EventsSection ctx={ctx} canManage={canManage} />}
-      {current.id === 'realtime' && <RealtimeSection site={site} />}
+      {current.id === 'realtime' && <RealtimeSection site={site} share={share} />}
       {current.id === 'settings' && siteInfo && (
         <SettingsSection key={siteInfo.domain + siteInfo.timezone + siteInfo.retention_days} site={siteInfo}
-          publicUrl={publicUrl} canDelete={user.is_admin} onChanged={onSitesChanged} />
+          publicUrl={publicUrl} canDelete={user?.is_admin ?? false} onChanged={onSitesChanged} />
       )}
     </>
   );

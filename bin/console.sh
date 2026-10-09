@@ -15,6 +15,11 @@
 #                                          printed once, store it safely
 #   key:list
 #   key:revoke <id>
+#   share:create <domain> [label]         public read-only link to the site's dashboard
+#                                          (no password; add one in the dashboard instead);
+#                                          printed once
+#   share:list <domain>
+#   share:delete <domain> <id>
 #   rollup:run                            roll up finished days now (the worker does it every 10 min)
 #   retention:run                         delete raw events past retention now (the worker does it hourly)
 #   help
@@ -27,7 +32,7 @@ cd "$(dirname "$0")/.."
 BASE="${SNOWPRINT_CONSOLE_URL:-http://127.0.0.1:7669}"
 TOKEN_FILE="var/operator.token"
 
-usage() { sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//'; }
 die() { echo "error: $*" >&2; exit 1; }
 
 # Values go inside JSON strings: allow only characters that need no escaping.
@@ -93,6 +98,19 @@ case "$cmd" in
         [ $# -eq 1 ] || die "usage: key:revoke <id>"
         case "$1" in *[!0-9]*) die "id must be a number" ;; esac
         call DELETE "/api/admin/api-keys/$1"
+        ;;
+    share:create)
+        [ $# -ge 1 ] || die "usage: share:create <domain> [label]"
+        call POST "/api/admin/sites/$(safe "$1")/shares" "{\"label\":\"$(safe "${2:-shared}")\"}"
+        ;;
+    share:list)
+        [ $# -eq 1 ] || die "usage: share:list <domain>"
+        call GET "/api/admin/sites/$(safe "$1")/shares"
+        ;;
+    share:delete)
+        [ $# -eq 2 ] || die "usage: share:delete <domain> <id>"
+        case "$2" in *[!0-9]*) die "id must be a number" ;; esac
+        call DELETE "/api/admin/sites/$(safe "$1")/shares/$2"
         ;;
     rollup:run)
         call POST /api/admin/jobs/rollup

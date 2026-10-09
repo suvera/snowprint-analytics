@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, type Invite, type Member, type Role, type Site, type SiteRoles, type User } from '../api';
+import { CopyField } from '../components/CopyField';
 
 interface Props {
   me: User;
@@ -221,17 +222,5 @@ function InviteForm({ sites, onDone }: { sites: Site[]; onDone: (created: { emai
         <button className="btn" type="button" onClick={() => onDone(null)}>Cancel</button>
       </div>
     </form>
-  );
-}
-
-function CopyField({ value, label }: { value: string; label: string }) {
-  const [copied, setCopied] = useState(false);
-  return (
-    <div className="copy-row">
-      <input readOnly value={value} aria-label={label} onFocus={(e) => e.target.select()} />
-      <button className="btn" type="button" onClick={() => {
-        navigator.clipboard?.writeText(value).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); }).catch(() => undefined);
-      }}>{copied ? 'Copied' : 'Copy'}</button>
-    </div>
   );
 }

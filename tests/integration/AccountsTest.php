@@ -5,6 +5,7 @@ namespace dev\suvera\snowprint\tests\integration;
 
 use dev\suvera\snowprint\site\InvalidInput;
 use dev\suvera\snowprint\site\InviteService;
+use dev\suvera\snowprint\site\ShareLinkService;
 use dev\suvera\snowprint\site\SiteService;
 use dev\suvera\snowprint\site\UserService;
 use dev\suvera\snowprint\tests\support\Beans;
@@ -88,6 +89,52 @@ final class AccountsTest extends TestCase {
         self::assertSame(0, (int) $pdo->query("SELECT count(*) FROM rollup_daily WHERE site_id = $id")->fetchColumn());
         self::assertSame(1, (int) $pdo->query("SELECT count(*) FROM deleted_sites WHERE site_id = $id")->fetchColumn());
         self::assertNull($this->sites->findByDomain('gone.accounts.test'));
+    }
+
+    public function testShareLinks(): void {
+        $id = $this->sites->create('shared.accounts.test')['id'];
+        $shares = Beans::inject(new ShareLinkService(), 'db', self::$db);
+        $open = $shares->create($id, null, ' Public ', null);
+        $locked = $shares->create($id, null, 'Team', 'share password 1');
+        self::assertMatchesRegularExpression('/^[0-9a-f]{32}$/', $open['token']);
+        self::assertSame('/ui/#/share/' . $open['token'], $open['path']);
+        self::assertSame('Public', $open['label']);
+
+        $pdo = self::$db->pdo;
+        self::assertSame(0, (int) $pdo->query("SELECT count(*) FROM share_links WHERE token_hash = '{$open['token']}'")->fetchColumn(),
+            'only the digest is stored');
+        self::assertSame(['Public', 'Team'], array_column($shares->forSite($id), 'label'));
+        self::assertSame([false, true], array_column($shares->forSite($id), 'has_password'));
+        self::assertArrayNotHasKey('token', $shares->forSite($id)[0]);
+
+        self::assertSame($id, $shares->resolve($open['token'])['site_id']);
+        self::assertNull($shares->resolve($open['token'] . '0'));
+        self::assertNull($shares->resolve(str_repeat('0', 32)));
+        $link = $shares->resolve($locked['token']);
+        self::assertFalse($shares->checkPassword($link, 'wrong password'));
+        self::assertTrue($shares->checkPassword($link, 'share password 1'));
+        self::assertTrue($shares->checkPassword($shares->resolve($open['token']), ''), 'no password needed');
+
+        self::assertFalse($shares->delete($id + 1, $open['id']), 'only on its own site');
+        self::assertTrue($shares->delete($id, $open['id']));
+        self::assertNull($shares->resolve($open['token']));
+        $this->sites->delete($id);
+        self::assertNull($shares->resolve($locked['token']), 'deleting the site deletes its links');
+    }
+
+    public function testShareLinkPasswordAttemptsAreLimited(): void {
+        $id = $this->sites->create('guess.accounts.test')['id'];
+        $shares = Beans::inject(new ShareLinkService(), 'db', self::$db);
+        $link = $shares->resolve($shares->create($id, null, '', 'share password 1')['token']);
+        for ($i = 0; $i < ShareLinkService::MAX_FAILURES; $i++) {
+            self::assertFalse($shares->checkPassword($link, 'guess ' . $i, 1000));
+        }
+        try {
+            $shares->checkPassword($link, 'share password 1', 1000 + ShareLinkService::FAILURE_WINDOW_SECONDS - 1);
+            self::fail('the right password was accepted while paused');
+        } catch (InvalidInput) {
+        }
+        self::assertTrue($shares->checkPassword($link, 'share password 1', 1000 + ShareLinkService::FAILURE_WINDOW_SECONDS));
     }
 
     public function testRetentionBounds(): void {

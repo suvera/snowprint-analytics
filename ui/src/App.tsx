@@ -3,6 +3,7 @@ import { api, type Attribution, type Site, type User } from './api';
 import { Sidebar } from './components/Sidebar';
 import { AuthPage } from './pages/AuthPage';
 import { SitesPage } from './pages/SitesPage';
+import { SharedDashboard } from './pages/SharedDashboard';
 import { UsersPage } from './pages/UsersPage';
 import { SiteView } from './pages/site/SiteView';
 import { navigate, useRoute } from './route';
@@ -34,6 +35,16 @@ export function App() {
 
   if (error) return <div className="auth-shell"><div className="error" role="alert">Snowprint is not reachable: {error}</div></div>;
   if (session.state === 'loading') return null;
+  const footer = (
+    <footer className="footer">
+      Snowprint · built on <a href="https://github.com/suvera/winter-boot">Winter Boot</a>
+      {geoCredit.text && <> · {geoCredit.url ? <a href={geoCredit.url}>{geoCredit.text}</a> : geoCredit.text}</>}
+    </footer>
+  );
+  // A share link opens one site read-only, with or without a session.
+  if (route.path[0] === 'share' && route.path[1]) {
+    return <SharedDashboard key={route.path[1]} token={route.path[1]} sectionId={route.path[2]} params={route.params} footer={footer} />;
+  }
   // An invite link opens the sign-up form even while someone is signed in.
   if (route.path[0] === 'invite' && route.path[1]) {
     return (
@@ -68,10 +79,7 @@ export function App() {
           : area === 'users' && session.user.is_admin
             ? <UsersPage me={session.user} sites={sites} />
             : <SitesPage publicUrl={publicUrl} onSitesChanged={loadSites} />}
-        <footer className="footer">
-          Snowprint · built on <a href="https://github.com/suvera/winter-boot">Winter Boot</a>
-          {geoCredit.text && <> · {geoCredit.url ? <a href={geoCredit.url}>{geoCredit.text}</a> : geoCredit.text}</>}
-        </footer>
+        {footer}
       </main>
     </div>
   );

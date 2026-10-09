@@ -235,7 +235,39 @@ case "$(ui GET /api/ui/users)" in "200 "*'viewer@example.com'*) ;; *) fail "admi
 case "$(ui DELETE /api/ui/sites/tz.test '{"confirm":"wrong"}')" in "400 "*) ;; *) fail "site deleted without confirmation" ;; esac
 case "$(ui DELETE /api/ui/sites/tz.test '{"confirm":"tz.test"}')" in "200 "*) ;; *) fail "site delete" ;; esac
 case "$(ui GET /api/ui/sites)" in *tz.test*) fail "deleted site still listed" ;; esac
-rm -f "$JAR"
+
+echo "==> Share links"
+shared() {   # TOKEN PATH -> status of a report fetched with a share token and the visitor's jar
+    curl -s -o /dev/null -b "$VISITOR" -c "$VISITOR" -w '%{http_code}' -H 'X-Snowprint: 1' \
+        -H "X-Snowprint-Share: $1" "http://localhost:$PORT$2"
+}
+share_token() { sed -n 's/.*"token":"\([0-9a-f]*\)".*/\1/p'; }
+open_share=$(ui POST /api/ui/sites/example.com/shares '{"label":"Public"}' | share_token)
+locked_share=$(ui POST /api/ui/sites/example.com/shares '{"label":"Team","password":"share password 1"}' | share_token)
+[ -n "$open_share" ] && [ -n "$locked_share" ] || fail "creating share links"
+case "$(ui GET /api/ui/sites/example.com/shares)" in "200 "*'"label":"Public"'*'"has_password":true'*) ;; *) fail "listing share links" ;; esac
+case "$(ui GET /api/ui/sites/example.com/shares)" in *"$open_share"*) fail "share link list exposes a token" ;; esac
+VISITOR="$(mktemp)"
+[ "$(shared "$open_share" '/api/ui/stats/overview?period=today')" = 200 ] || fail "open share link cannot read reports"
+[ "$(shared "$open_share" '/api/ui/stats/breakdown?period=today&dimension=page')" = 200 ] || fail "share link breakdown"
+[ "$(shared "$open_share" '/api/ui/stats/realtime')" = 200 ] || fail "share link realtime"
+[ "$(shared "$open_share" '/api/ui/sites')" = 401 ] || fail "a share link opened the site list"
+[ "$(shared "$open_share" '/api/ui/sites/example.com/shares')" = 401 ] || fail "a share link listed share links"
+[ "$(shared "0123456789abcdef0123456789abcdef" '/api/ui/stats/overview?period=today')" = 404 ] || fail "unknown share token accepted"
+[ "$(shared "$locked_share" '/api/ui/stats/overview?period=today')" = 401 ] || fail "password-protected link read without password"
+share_api() { curl -s -b "$VISITOR" -c "$VISITOR" -w '\n%{http_code}' -X POST -H 'X-Snowprint: 1' \
+    -H 'Content-Type: application/json' --data "$2" "http://localhost:$PORT/api/share/$1" | tr '\n' ' '; }
+case "$(share_api info "{\"token\":\"$open_share\"}")" in *'"domain":"example.com"'*'"password_required":false'*200*) ;; *) fail "open share info" ;; esac
+case "$(share_api info "{\"token\":\"$locked_share\"}")" in *'"site":null'*'"password_required":true'*200*) ;; *) fail "locked share info" ;; esac
+case "$(share_api unlock "{\"token\":\"$locked_share\",\"password\":\"nope nope nope\"}")" in *401*) ;; *) fail "wrong share password accepted" ;; esac
+case "$(share_api unlock "{\"token\":\"$locked_share\",\"password\":\"share password 1\"}")" in *200*) ;; *) fail "unlocking a share link" ;; esac
+[ "$(shared "$locked_share" '/api/ui/stats/overview?period=today')" = 200 ] || fail "unlocked share link cannot read reports"
+console share:create example.com demo | grep -Eq '"path": ?"\\?/ui\\?/#\\?/share\\?/[0-9a-f]{32}"' || fail "console share:create"
+console share:list example.com | grep -Eq '"label": ?"demo"' || fail "console share:list"
+open_id=$(ui GET /api/ui/sites/example.com/shares | sed -n 's/.*"id":\([0-9]*\),"label":"Public".*/\1/p')
+case "$(ui DELETE "/api/ui/sites/example.com/shares/$open_id")" in "200 "*) ;; *) fail "deleting a share link" ;; esac
+[ "$(shared "$open_share" '/api/ui/stats/overview?period=today')" = 404 ] || fail "deleted share link still works"
+rm -f "$VISITOR" "$JAR"
 
 echo "==> Dashboard app"
 case "$(curl -s "http://localhost:$PORT/ui/")" in *'<div id="root">'*) ;; *) fail "/ui/ does not serve the dashboard" ;; esac
@@ -318,4 +350,4 @@ until curl -s "http://localhost:$PORT/api/system/health" | grep -q '"status":"UP
     i=$((i + 1)); [ "$i" -le 30 ] || fail "/health did not recover after PostgreSQL came back"; sleep 1
 done
 
-echo "PASS: migrated ($partitions events partitions), tracking stored and anonymised, sessions assigned, rollups and retention, MCP tools and auth, dashboard app, API and sign-in, site settings, invites and roles, Prometheus metrics, everything under /api/, health UP, DOWN and recovered with PostgreSQL, /api/status OK, container healthy"
+echo "PASS: migrated ($partitions events partitions), tracking stored and anonymised, sessions assigned, rollups and retention, MCP tools and auth, dashboard app, API and sign-in, site settings, invites and roles, share links, Prometheus metrics, everything under /api/, health UP, DOWN and recovered with PostgreSQL, /api/status OK, container healthy"

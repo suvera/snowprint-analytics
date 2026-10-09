@@ -24,7 +24,10 @@ use dev\winterframework\web\session\SessionOptions;
 class UiSessions {
 
     public const COOKIE = 'snowprint_session';
+    /** Separate session for visitors of password-protected share links. */
+    public const SHARE_COOKIE = 'snowprint_share';
     private const USER_ID = 'uid';
+    private const UNLOCKED = 'shares';
 
     #[Autowired]
     private SessionManager $manager;
@@ -39,6 +42,7 @@ class UiSessions {
     private ApplicationContext $ctx;
 
     private ?SessionOptions $options = null;
+    private ?SessionOptions $shareOptions = null;
 
     public function open(HttpRequest $request): RequestSession {
         return $this->manager->open($request, $this->store, $this->options());
@@ -63,6 +67,37 @@ class UiSessions {
     public function commit(RequestSession $session, ResponseEntity $response): ResponseEntity {
         $this->manager->commit($session, $response, $this->store, $this->options());
         return $response;
+    }
+
+    public function openShare(HttpRequest $request): RequestSession {
+        return $this->manager->open($request, $this->store, $this->shareOptions());
+    }
+
+    public function isUnlocked(RequestSession $session, int $linkId): bool {
+        return in_array($linkId, (array) $session->get(self::UNLOCKED), true);
+    }
+
+    /** Remembers a share link whose password this browser entered. */
+    public function unlock(RequestSession $session, int $linkId): void {
+        $ids = array_values(array_filter((array) $session->get(self::UNLOCKED), 'is_int'));
+        $session->regenerateId(); // a privilege change, like signing in
+        $ids[] = $linkId;
+        $session->set(self::UNLOCKED, array_slice(array_values(array_unique($ids)), -20));
+    }
+
+    public function commitShare(RequestSession $session, ResponseEntity $response): ResponseEntity {
+        $this->manager->commit($session, $response, $this->store, $this->shareOptions());
+        return $response;
+    }
+
+    private function shareOptions(): SessionOptions {
+        return $this->shareOptions ??= new SessionOptions(
+            name: self::SHARE_COOKIE,
+            expirySecs: SessionStoreConfig::TTL_SECONDS,
+            secure: $this->options()->secure,
+            httponly: true,
+            samesite: 'Lax',
+        );
     }
 
     private function options(): SessionOptions {

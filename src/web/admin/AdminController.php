@@ -3,12 +3,14 @@ declare(strict_types=1);
 
 namespace dev\suvera\snowprint\web\admin;
 
+use dev\suvera\snowprint\infra\PublicUrl;
 use dev\suvera\snowprint\query\RetentionService;
 use dev\suvera\snowprint\query\RollupBuilder;
 use dev\suvera\snowprint\query\RollupService;
 use dev\suvera\snowprint\site\ApiKeyService;
 use dev\suvera\snowprint\site\GoalService;
 use dev\suvera\snowprint\site\InvalidInput;
+use dev\suvera\snowprint\site\ShareLinkService;
 use dev\suvera\snowprint\site\SiteService;
 use dev\winterframework\stereotype\Autowired;
 use dev\winterframework\stereotype\RestController;
@@ -43,6 +45,12 @@ class AdminController {
 
     #[Autowired]
     private RollupService $rollupData;
+
+    #[Autowired]
+    private ShareLinkService $shares;
+
+    #[Autowired]
+    private PublicUrl $publicUrl;
 
     #[GetMapping(path: '/api/admin/sites')]
     public function listSites(): array {
@@ -119,6 +127,41 @@ class AdminController {
         return $this->keys->revoke($id)
             ? ResponseEntity::ok(['revoked' => $id])
             : ResponseEntity::notFound()->withJson(['error' => 'no active key with id ' . $id]);
+    }
+
+    #[GetMapping(path: '/api/admin/sites/{domain}/shares')]
+    public function listShares(#[PathVariable] string $domain): ResponseEntity {
+        return self::guard(function () use ($domain) {
+            $site = $this->sites->findByDomain($domain) ?? throw new InvalidInput('unknown site: ' . $domain);
+            return ResponseEntity::ok(['shares' => $this->shares->forSite($site['id'])]);
+        });
+    }
+
+    /**
+     * Body: {"label": "..."}. A share link without a password (set passwords in
+     * the dashboard, not on a command line). The link is shown once.
+     */
+    #[PostMapping(path: '/api/admin/sites/{domain}/shares')]
+    public function createShare(HttpRequest $request, #[PathVariable] string $domain): ResponseEntity {
+        return self::guard(function () use ($request, $domain) {
+            $site = $this->sites->findByDomain($domain) ?? throw new InvalidInput('unknown site: ' . $domain);
+            $share = $this->shares->create($site['id'], null, (string) (self::json($request)['label'] ?? ''), null);
+            $base = $this->publicUrl->get();
+            return ResponseEntity::ok([
+                'share' => $share + ['url' => $base === '' ? '' : $base . $share['path']],
+                'note' => 'Anyone with this link can read the dashboard of ' . $site['domain'] . '. It is not shown again.',
+            ]);
+        });
+    }
+
+    #[DeleteMapping(path: '/api/admin/sites/{domain}/shares/{id}')]
+    public function deleteShare(#[PathVariable] string $domain, #[PathVariable] int $id): ResponseEntity {
+        return self::guard(function () use ($domain, $id) {
+            $site = $this->sites->findByDomain($domain) ?? throw new InvalidInput('unknown site: ' . $domain);
+            return $this->shares->delete($site['id'], $id)
+                ? ResponseEntity::ok(['deleted' => $id])
+                : ResponseEntity::notFound()->withJson(['error' => 'no share link with id ' . $id . ' on ' . $site['domain']]);
+        });
     }
 
     /** Runs the rollup job now (it also runs every 10 minutes on worker pods). */

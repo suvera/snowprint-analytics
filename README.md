@@ -18,7 +18,6 @@ One PHP container plus Postgres. No cookies. Ask your traffic questions from Cla
 
 **Live instance:** [snowprint.suvera.xyz/ui](https://snowprint.suvera.xyz/ui/), a real Snowprint
 deployment on Kubernetes tracking the [Winter Boot documentation](https://suvera.github.io/winter-boot/).
-Sign-in is required for now; a public read-only dashboard comes with shareable links.
 
 ![Snowprint dashboard: overview with visitors, visits, pageviews, bounce rate and visit duration, a traffic chart, and top sources, pages, locations and devices](docs/images/dashboard.jpg)
 
@@ -217,6 +216,17 @@ user**: choose admin (everything) or a role per site, **viewer** (reports) or **
 (reports, goals and the site's settings). Snowprint sends no email: copy the invite link to
 the person. It works once, for 7 days.
 
+### Share links
+
+To show a site's reports to people without an account, a site admin creates a **share link**
+on the site's **Settings** page, optionally with a password. Anyone with the link reads the
+reports but cannot change anything. The link is shown once; delete it to revoke access. The
+operator console creates links without a password:
+
+```bash
+docker exec snowprint bin/console.sh share:create example.com "Public stats"
+```
+
 ## Ask Claude
 
 Snowprint has a built-in [MCP](https://modelcontextprotocol.io) server at `/api/mcp`, so Claude
@@ -355,8 +365,8 @@ bench/          ingest benchmark harness
 |---|---|
 | M0 spike | Ingest path, batched writes, published benchmark |
 | M1 MVP | Tracking script, dashboard, goals, users, rollups and retention, MCP tools, Docker image, Helm chart |
-| M2 launch | Public benchmarks and docs |
-| v1.0 | Matomo tracker compatibility and importer, public dashboards, email reports, Redis tier |
+| M2 launch | Share links, CI, published image and benchmark, docs |
+| v1.0 | Matomo tracker compatibility and importer, email reports, Redis tier |
 | v1.1 | Basic ecommerce, Matomo Reporting API subset, Kafka/OpenSearch tiers, WordPress plugin |
 
 ## Contributing

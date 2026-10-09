@@ -68,7 +68,8 @@ set) and from recognised bots are not tracked.
   events, bounces and total visit time, per page, source, country, browser and so on. They
   contain no hashes or session ids and are kept until the site is deleted.
 - **Salts** are deleted after 48 hours.
-- **Deleting a site** removes its events, daily totals, goals and access grants at once.
+- **Deleting a site** removes its events, daily totals, goals, share links and access grants
+  at once.
 
 ## Dashboard users and API keys
 
@@ -76,7 +77,11 @@ set) and from recognised bots are not tracked.
 - Sign-in sessions: a random session id in a cookie (`HttpOnly`, `SameSite=Lax`, and `Secure`
   with `SNOWPRINT_SECURE_COOKIES=true`) and the session row in the database, deleted on sign-out. This cookie is for
   the dashboard only; visitors of tracked sites never get one.
-- Invite links and API keys: only SHA-256 digests are stored; the secret is shown once.
+- Invite links, share links and API keys: only SHA-256 digests are stored; the secret is
+  shown once. Share-link passwords are stored as Argon2id hashes.
+- Share links: a visitor who enters a share link's password gets a second cookie
+  (`snowprint_share`, same flags as the sign-in cookie) that remembers which links they
+  unlocked. Links without a password set no cookie.
 - MCP calls are logged with the tool, site, key id and duration, never the arguments.
 
 ## Logs

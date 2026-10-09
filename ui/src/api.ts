@@ -110,14 +110,30 @@ export interface Realtime {
   pages: { page: string; visitors: number }[];
 }
 
+export interface ShareLink {
+  id: number;
+  label: string;
+  has_password: boolean;
+  created_at: string;
+  last_used_at: string | null;
+}
+
+export interface SharedSite {
+  domain: string;
+  timezone: string;
+  has_data: boolean;
+}
+
 export type Filters = Record<string, string>;
 
-async function request<T>(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
+async function request<T>(method: string, path: string, body?: unknown, signal?: AbortSignal, share?: string): Promise<T> {
   const response = await fetch(path, {
     method,
     credentials: 'same-origin',
     headers: {
       'X-Snowprint': '1',
+      // Share-link token: a header, never the URL, so server logs never hold it.
+      ...(share ? { 'X-Snowprint-Share': share } : {}),
       ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
     },
     body: body === undefined ? undefined : JSON.stringify(body),
@@ -142,10 +158,12 @@ export interface ReportParams {
   site: string;
   period: string;
   filters: Filters;
+  share?: string;   // share-link token: the link decides the site
 }
 
 function reportQuery(p: ReportParams, extra: Record<string, string | number | undefined> = {}): string {
   return query({
+    // The token goes in a header; "site" is ignored for share links.
     site: p.site,
     period: p.period,
     filters: Object.keys(p.filters).length ? JSON.stringify(p.filters) : undefined,
@@ -177,14 +195,24 @@ export const api = {
     request<{ user: User }>('POST', '/api/ui/invite/accept', { token, name, password }),
   addGoal: (domain: string, kind: string, match: string, name: string) =>
     request<{ goal: Goal }>('POST', `/api/ui/sites/${encodeURIComponent(domain)}/goals`, { kind, match, name }),
+  shares: (domain: string) =>
+    request<{ shares: ShareLink[] }>('GET', `/api/ui/sites/${encodeURIComponent(domain)}/shares`),
+  addShare: (domain: string, label: string, password: string) =>
+    request<{ share: ShareLink & { token: string; path: string } }>('POST', `/api/ui/sites/${encodeURIComponent(domain)}/shares`,
+      { label, password: password || undefined }),
+  deleteShare: (domain: string, id: number) =>
+    request<unknown>('DELETE', `/api/ui/sites/${encodeURIComponent(domain)}/shares/${id}`),
+  shareInfo: (token: string) =>
+    request<{ site: SharedSite | null; label: string; password_required: boolean }>('POST', '/api/share/info', { token }),
+  unlockShare: (token: string, password: string) => request<unknown>('POST', '/api/share/unlock', { token, password }),
   overview: (p: ReportParams, signal?: AbortSignal) =>
-    request<Overview>('GET', `/api/ui/stats/overview?${reportQuery(p)}`, undefined, signal),
+    request<Overview>('GET', `/api/ui/stats/overview?${reportQuery(p)}`, undefined, signal, p.share),
   timeseries: (p: ReportParams, metric: string, signal?: AbortSignal) =>
-    request<Series>('GET', `/api/ui/stats/timeseries?${reportQuery(p, { metric, compare: 1 })}`, undefined, signal),
+    request<Series>('GET', `/api/ui/stats/timeseries?${reportQuery(p, { metric, compare: 1 })}`, undefined, signal, p.share),
   breakdown: (p: ReportParams, dimension: string, limit = 9, signal?: AbortSignal, compare = false) =>
-    request<{ rows: BreakdownRow[] }>('GET', `/api/ui/stats/breakdown?${reportQuery(p, { dimension, limit, compare: compare ? 1 : undefined })}`, undefined, signal),
+    request<{ rows: BreakdownRow[] }>('GET', `/api/ui/stats/breakdown?${reportQuery(p, { dimension, limit, compare: compare ? 1 : undefined })}`, undefined, signal, p.share),
   goals: (p: ReportParams, signal?: AbortSignal) =>
-    request<{ goals: Goal[] }>('GET', `/api/ui/stats/goals?${reportQuery(p)}`, undefined, signal),
-  realtime: (site: string, signal?: AbortSignal) =>
-    request<Realtime>('GET', `/api/ui/stats/realtime?${query({ site })}`, undefined, signal),
+    request<{ goals: Goal[] }>('GET', `/api/ui/stats/goals?${reportQuery(p)}`, undefined, signal, p.share),
+  realtime: (site: string, signal?: AbortSignal, share?: string) =>
+    request<Realtime>('GET', `/api/ui/stats/realtime?${query({ site })}`, undefined, signal, share),
 };

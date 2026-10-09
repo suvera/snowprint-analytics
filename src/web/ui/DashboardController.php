@@ -9,6 +9,7 @@ use dev\suvera\snowprint\query\RollupService;
 use dev\suvera\snowprint\query\StatsQuery;
 use dev\suvera\snowprint\site\GoalService;
 use dev\suvera\snowprint\site\InvalidInput;
+use dev\suvera\snowprint\site\ShareLinkService;
 use dev\suvera\snowprint\site\SiteService;
 use dev\suvera\snowprint\site\User;
 use dev\winterframework\stereotype\Autowired;
@@ -25,6 +26,8 @@ use dev\winterframework\web\http\ResponseEntity;
 /**
  * JSON API behind the React dashboard (D10). Reports reuse StatsQuery, the
  * same engine as MCP. Query parameters: site, period, filters (JSON object).
+ * Reports also answer share-link visitors (SP-046): with an
+ * "X-Snowprint-Share: <token>" header the link picks the site, not "site".
  */
 #[RestController]
 class DashboardController {
@@ -44,6 +47,9 @@ class DashboardController {
 
     #[Autowired]
     private RollupService $rollups;
+
+    #[Autowired]
+    private ShareLinkService $shares;
 
     #[GetMapping(path: '/api/ui/sites')]
     public function sites(HttpRequest $request): ResponseEntity {
@@ -135,6 +141,40 @@ class DashboardController {
         });
     }
 
+    /** Site admins: the site's share links (never their tokens). */
+    #[GetMapping(path: '/api/ui/sites/{domain}/shares')]
+    public function listShares(HttpRequest $request, #[PathVariable] string $domain): ResponseEntity {
+        return self::handle(function () use ($request, $domain) {
+            $site = $this->managedSite($request, $domain);
+            return ResponseEntity::ok()->withJson(['shares' => $this->shares->forSite($site['id'])]);
+        });
+    }
+
+    /** Site admins. Body: {"label": "...", "password": "..."}, both optional. Returns the token once. */
+    #[PostMapping(path: '/api/ui/sites/{domain}/shares')]
+    public function createShare(HttpRequest $request, #[PathVariable] string $domain): ResponseEntity {
+        return self::handle(function () use ($request, $domain) {
+            self::requireUiHeader($request);
+            $site = $this->managedSite($request, $domain);
+            $body = self::body($request);
+            $share = $this->shares->create($site['id'], $this->user($request)->id, (string) ($body['label'] ?? ''),
+                isset($body['password']) ? (string) $body['password'] : null);
+            return ResponseEntity::ok()->withJson(['share' => $share]);
+        });
+    }
+
+    #[DeleteMapping(path: '/api/ui/sites/{domain}/shares/{id}')]
+    public function deleteShare(HttpRequest $request, #[PathVariable] string $domain, #[PathVariable] int $id): ResponseEntity {
+        return self::handle(function () use ($request, $domain, $id) {
+            self::requireUiHeader($request);
+            $site = $this->managedSite($request, $domain);
+            if (!$this->shares->delete($site['id'], $id)) {
+                throw new UiError(HttpStatus::$NOT_FOUND, 'share link not found');
+            }
+            return ResponseEntity::ok()->withJson(['deleted' => $id]);
+        });
+    }
+
     #[GetMapping(path: '/api/ui/stats/overview')]
     public function overview(HttpRequest $request): ResponseEntity {
         return $this->report($request, fn(array $site, Period $p, Filters $f) =>
@@ -194,7 +234,7 @@ class DashboardController {
     #[GetMapping(path: '/api/ui/stats/realtime')]
     public function realtime(HttpRequest $request): ResponseEntity {
         return self::handle(function () use ($request) {
-            $site = $this->site($this->user($request), (string) $request->getQueryParam('site'));
+            $site = $this->reportSite($request);
             return ResponseEntity::ok()->withJson($this->stats->realtime($site['id']));
         });
     }
@@ -202,7 +242,7 @@ class DashboardController {
     /** @param \Closure(array, Period, Filters): array $query */
     private function report(HttpRequest $request, \Closure $query): ResponseEntity {
         return self::handle(function () use ($request, $query) {
-            $site = $this->site($this->user($request), (string) $request->getQueryParam('site'));
+            $site = $this->reportSite($request);
             $period = Period::parse((string) ($request->getQueryParam('period') ?? '7d'), $site['timezone']);
             $raw = (string) $request->getQueryParam('filters');
             $filters = Filters::of($raw === '' ? null : self::decodeFilters($raw));
@@ -225,6 +265,33 @@ class DashboardController {
             throw new UiError(HttpStatus::$UNAUTHORIZED, 'sign in first');
         }
         return $user;
+    }
+
+    /**
+     * The site a report is for: the share link's site when the request
+     * carries X-Snowprint-Share, else the signed-in user's "site" parameter.
+     * @return array{id: int, domain: string, timezone: string, retention_days: int}
+     */
+    private function reportSite(HttpRequest $request): array {
+        $token = (string) $request->getFirstHeader('X-Snowprint-Share');
+        if ($token === '') {
+            return $this->site($this->user($request), (string) $request->getQueryParam('site'));
+        }
+        $link = $this->shares->resolve($token) ?? throw new UiError(HttpStatus::$NOT_FOUND, 'this share link does not exist');
+        if ($link['password_hash'] !== null && !$this->sessions->isUnlocked($this->sessions->openShare($request), $link['id'])) {
+            throw new UiError(HttpStatus::$UNAUTHORIZED, 'enter the password of this share link');
+        }
+        return $this->sites->find($link['site_id']) ?? throw new UiError(HttpStatus::$NOT_FOUND, 'site not found');
+    }
+
+    /** @return array{id: int, domain: string, timezone: string, retention_days: int} a site the user manages */
+    private function managedSite(HttpRequest $request, string $domain): array {
+        $user = $this->user($request);
+        $site = $this->site($user, $domain);
+        if (!$user->canManage($site['id'])) {
+            throw new UiError(HttpStatus::$FORBIDDEN, 'only site admins can manage share links');
+        }
+        return $site;
     }
 
     /** @return array{id: int, domain: string, timezone: string, retention_days: int} */
