@@ -262,13 +262,22 @@ docker exec snowprint bin/console.sh share:create example.com "Public stats"
 Snowprint has a built-in [MCP](https://modelcontextprotocol.io) server at `/api/mcp`, so Claude
 (or any MCP client) can query your analytics directly.
 
-**1. Create an API key** (read-only, limited to the sites you list; shown once):
+**1. Create an API key.** MCP clients authenticate with a Snowprint API key, sent as a bearer
+token. Keys are created with the operator console (not in the dashboard); each key is
+read-only and limited to the sites you list:
 
 ```bash
 docker exec snowprint bin/console.sh key:create claude example.com      # or: all
 ```
 
-**2. Connect your client.** Claude Code:
+```json
+{"api_key":{"id":1,"key":"sp_..."},"note":"Store this key now: it is not shown again."}
+```
+
+The `key` value (it starts with `sp_`) is the bearer token. Only a hash of it is stored, so
+copy it now; if you lose it, revoke it and create a new one.
+
+**2. Connect your client**, replacing `sp_...` with your key. Claude Code:
 
 ```bash
 claude mcp add --transport http snowprint https://stats.example.com/api/mcp \
