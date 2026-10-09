@@ -52,7 +52,7 @@ class DashboardController {
             $sites = [];
             foreach ($this->sites->all() as $site) {
                 if ($user->canRead($site['id'])) {
-                    $sites[] = $site + ['can_manage' => $user->canManage($site['id'])];
+                    $sites[] = $site + ['can_manage' => $user->canManage($site['id']), 'has_data' => $this->sites->hasData($site['id'])];
                 }
             }
             return ResponseEntity::ok()->withJson(['sites' => $sites, 'can_manage' => $user->isAdmin]);

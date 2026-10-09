@@ -25,6 +25,7 @@ export interface Site {
   timezone: string;
   retention_days: number;   // raw events kept this many days; 0 = forever
   can_manage?: boolean;     // the user may change settings and goals
+  has_data?: boolean;       // the site has received at least one event
 }
 
 export type Role = 'viewer' | 'admin';

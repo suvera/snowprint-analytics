@@ -93,6 +93,17 @@ export function SiteView({ site, siteInfo, sectionId, params, publicUrl, user, o
         </div>
       )}
 
+      {current.id === 'overview' && siteInfo?.has_data === false && !showSnippet && (
+        <section className="card notice-card" style={{ marginBottom: 16 }} aria-label="Getting started">
+          <strong>Waiting for the first visit to {site}.</strong> Add this to the <code>&lt;head&gt;</code> of
+          every page, then open your site in a browser (localhost is not tracked):
+          <Snippet domain={site} publicUrl={publicUrl} />
+          <div className="form-actions">
+            <button className="btn" onClick={onSitesChanged}>Check again</button>
+            <span className="muted small">Browsers with Do Not Track and ad blockers that block snow.js are not counted.</span>
+          </div>
+        </section>
+      )}
       {current.id === 'overview' && <OverviewSection ctx={ctx} />}
       {current.tabs && <DimensionSection key={current.id} ctx={ctx} section={current} />}
       {current.id === 'events' && <EventsSection ctx={ctx} canManage={canManage} />}

@@ -137,6 +137,13 @@ class SiteService {
         $this->db->update('DELETE FROM sites WHERE id = ?', [$siteId]);
     }
 
+    /** True once the site has received any event (raw or rolled up). */
+    public function hasData(int $siteId): bool {
+        return (bool) $this->db->queryForScalar(
+            'SELECT EXISTS (SELECT 1 FROM events WHERE site_id = ?) OR EXISTS (SELECT 1 FROM rollup_daily WHERE site_id = ?)',
+            [$siteId, $siteId]);
+    }
+
     public static function retentionDays(int $days): int {
         if ($days < 0 || $days > self::MAX_RETENTION_DAYS) {
             throw new InvalidInput('retention must be 0 (keep forever) to ' . self::MAX_RETENTION_DAYS . ' days');

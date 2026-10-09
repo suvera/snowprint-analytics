@@ -130,6 +130,7 @@ button, input, select { font: inherit; color: inherit; }
 .btn-danger { border-color: var(--bad); color: var(--bad); background: var(--surface); }
 .btn-danger:hover:not(:disabled) { background: var(--danger-bg); border-color: var(--bad); }
 .danger-zone { border-color: var(--bad); }
+.notice-card { border-color: var(--accent); background: var(--accent-wash); }
 .field input[readonly] { color: var(--ink-3); }
 .check { display: flex; align-items: center; gap: 8px; margin-top: 14px; font-size: 14px; }
 .roles { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; align-items: center; margin-top: 6px; }

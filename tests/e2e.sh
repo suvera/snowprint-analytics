@@ -198,7 +198,7 @@ case "$(ui POST /api/ui/setup '{"email":"Admin@Example.com","name":"Admin","pass
     "200 "*'"is_admin":true'*) ;; *) fail "first-run setup" ;; esac
 case "$(ui POST /api/ui/setup '{"email":"x@example.com","name":"X","password":"another long one"}')" in
     "400 "*'already complete'*) ;; *) fail "setup must only run once" ;; esac
-case "$(ui GET /api/ui/sites)" in "200 "*'"domain":"example.com"'*) ;; *) fail "signed-in user cannot list sites" ;; esac
+case "$(ui GET /api/ui/sites)" in "200 "*'"domain":"example.com"'*'"has_data":true'*) ;; *) fail "signed-in user cannot list sites" ;; esac
 case "$(ui POST /api/ui/sites '{"domain":"tz.test","timezone":"Asia/Calcutta"}')" in
     "200 "*'"timezone":"Asia\/Kolkata"'*|"200 "*'"timezone":"Asia/Kolkata"'*) ;;
     *) fail "legacy browser timezone (Asia/Calcutta) must be accepted as Asia/Kolkata" ;; esac
