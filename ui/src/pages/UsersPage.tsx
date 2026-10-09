@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, type Invite, type Member, type Role, type Site, type SiteRoles, type User } from '../api';
+import { api, type CreatedInvite, type Invite, type Member, type Role, type Site, type SiteRoles, type User } from '../api';
 import { CopyField } from '../components/CopyField';
 
 interface Props {
@@ -14,10 +14,11 @@ export function UsersPage({ me, sites }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<number | null>(null);
   const [inviting, setInviting] = useState(false);
-  const [link, setLink] = useState<{ email: string; url: string } | null>(null);
+  const [mailEnabled, setMailEnabled] = useState(false);
+  const [link, setLink] = useState<{ email: string; url: string; emailed: boolean; emailError?: string } | null>(null);
 
   const load = () => api.users()
-    .then((r) => { setUsers(r.users); setInvites(r.invites); })
+    .then((r) => { setUsers(r.users); setInvites(r.invites); setMailEnabled(r.mail_enabled === true); })
     .catch((e) => setError(e.message));
   useEffect(() => { load(); }, []);
 
@@ -42,18 +43,23 @@ export function UsersPage({ me, sites }: Props) {
 
       <div className="stack">
         {inviting && (
-          <InviteForm sites={sites} onDone={(created) => {
+          <InviteForm sites={sites} mailEnabled={mailEnabled} onDone={(created) => {
             setInviting(false);
             if (created) {
-              setLink({ email: created.email, url: `${window.location.origin}/ui/#/invite/${created.token}` });
+              setLink({
+                email: created.invite.email, url: `${window.location.origin}/ui/#/invite/${created.invite.token}`,
+                emailed: created.emailed, emailError: created.email_error,
+              });
               load();
             }
           }} />
         )}
         {link && (
           <section className="card" aria-live="polite">
-            <strong>Invite link for {link.email}</strong>
-            <p className="small muted">Send it to them yourself: Snowprint does not send email. It works once, for 7 days,
+            <strong>{link.emailed ? `Invite emailed to ${link.email}` : `Invite link for ${link.email}`}</strong>
+            {link.emailError && <div className="error" role="alert">The email could not be sent: {link.emailError}</div>}
+            <p className="small muted">
+              {link.emailed ? 'You can also send the link yourself.' : 'Send it to them yourself.'} It works once, for 7 days,
               and is not shown again.</p>
             <CopyField value={link.url} label="Invite link" />
           </section>
@@ -192,20 +198,27 @@ function AccessForm({ member, sites, isSelf, onSave, onCancel }: {
   );
 }
 
-function InviteForm({ sites, onDone }: { sites: Site[]; onDone: (created: { email: string; token: string } | null) => void }) {
+function InviteForm({ sites, mailEnabled, onDone }: {
+  sites: Site[]; mailEnabled: boolean;
+  onDone: (created: { invite: CreatedInvite; emailed: boolean; email_error?: string } | null) => void;
+}) {
   const [email, setEmail] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
   const [roles, setRoles] = useState<SiteRoles>({});
   const [error, setError] = useState<string | null>(null);
 
+  const [busy, setBusy] = useState(false);
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setBusy(true);
     try {
-      const { invite } = await api.invite(email, isAdmin, isAdmin ? {} : roles);
-      onDone(invite);
+      onDone(await api.invite(email, isAdmin, isAdmin ? {} : roles));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not create the invite');
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -218,7 +231,9 @@ function InviteForm({ sites, onDone }: { sites: Site[]; onDone: (created: { emai
       <AccessFields sites={sites} isAdmin={isAdmin} roles={roles} onChange={(a, r) => { setIsAdmin(a); setRoles(r); }} />
       {error && <div className="error" role="alert">{error}</div>}
       <div className="form-actions">
-        <button className="btn btn-primary" type="submit">Create invite link</button>
+        <button className="btn btn-primary" type="submit" disabled={busy}>
+          {mailEnabled ? (busy ? 'Sending…' : 'Send invite') : 'Create invite link'}
+        </button>
         <button className="btn" type="button" onClick={() => onDone(null)}>Cancel</button>
       </div>
     </form>

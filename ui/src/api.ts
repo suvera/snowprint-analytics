@@ -40,6 +40,13 @@ export interface Member {
   last_login_at: string | null;
 }
 
+export interface CreatedInvite {
+  id: number;
+  token: string;
+  email: string;
+  expires_at: string;
+}
+
 export interface Invite {
   id: number;
   email: string;
@@ -183,12 +190,13 @@ export const api = {
     request<{ site: Site }>('PATCH', `/api/ui/sites/${encodeURIComponent(domain)}`, changes),
   deleteSite: (domain: string) =>
     request<unknown>('DELETE', `/api/ui/sites/${encodeURIComponent(domain)}`, { confirm: domain }),
-  users: () => request<{ users: Member[]; invites: Invite[] }>('GET', '/api/ui/users'),
+  users: () => request<{ users: Member[]; invites: Invite[]; mail_enabled?: boolean }>('GET', '/api/ui/users'),
   updateUser: (id: number, isAdmin: boolean, sites: SiteRoles) =>
     request<{ user: User }>('PUT', `/api/ui/users/${id}`, { is_admin: isAdmin, sites }),
   deleteUser: (id: number) => request<unknown>('DELETE', `/api/ui/users/${id}`),
   invite: (email: string, isAdmin: boolean, sites: SiteRoles) =>
-    request<{ invite: { id: number; token: string; email: string; expires_at: string } }>('POST', '/api/ui/invites', { email, is_admin: isAdmin, sites }),
+    request<{ invite: CreatedInvite; emailed: boolean; email_error?: string }>('POST', '/api/ui/invites',
+      { email, is_admin: isAdmin, sites, dashboard_url: window.location.origin }),
   revokeInvite: (id: number) => request<unknown>('DELETE', `/api/ui/invites/${id}`),
   inviteInfo: (token: string) => request<{ invite: { email: string } }>('POST', '/api/ui/invite', { token }),
   acceptInvite: (token: string, name: string, password: string) =>

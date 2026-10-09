@@ -72,6 +72,29 @@ all: {{ .Values.single.replicas }}
   value: {{ . | quote }}
 {{- end }}
 {{- end }}
+{{- with .Values.mail }}
+{{- if .host }}
+- name: SNOWPRINT_SMTP_HOST
+  value: {{ .host | quote }}
+- name: SNOWPRINT_SMTP_PORT
+  value: {{ .port | quote }}
+- name: SNOWPRINT_SMTP_ENCRYPTION
+  value: {{ .encryption | quote }}
+- name: SNOWPRINT_SMTP_USER
+  value: {{ .username | quote }}
+- name: SNOWPRINT_SMTP_FROM
+  value: {{ .from | quote }}
+{{- if .existingSecret }}
+- name: SNOWPRINT_SMTP_PASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: {{ .existingSecret }}
+      key: {{ .existingSecretPasswordKey }}
+      # A missing Secret must not stop the pods: invites then show the SMTP error.
+      optional: true
+{{- end }}
+{{- end }}
+{{- end }}
 {{- with .Values.extraEnv }}
 {{ toYaml . }}
 {{- end }}

@@ -11,7 +11,8 @@ use dev\winterframework\stereotype\Service;
  * Invite links (SP-019). An admin invites an email address with an admin flag
  * and site roles; the link carries a random token (only its SHA-256 digest is
  * stored) and works once, for INVITE_DAYS days. The invitee picks a name and
- * password. Snowprint sends no email: the admin shares the link.
+ * password. The link is emailed when SMTP is configured; the admin can always
+ * copy it.
  */
 #[Service]
 class InviteService {

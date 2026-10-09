@@ -5,13 +5,18 @@
 #   tests/e2e.sh
 # E2E_PG_IMAGE picks the PostgreSQL version (default postgres:18-alpine).
 # E2E_PORT is the host port for the app (default 17669); E2E_PG_PORT the
-# host port PostgreSQL listens on (default 15432). E2E_KEEP=1 leaves the
+# host port PostgreSQL listens on (default 15432), E2E_SMTP_PORT / E2E_MAIL_API_PORT
+# Mailpit's SMTP and API ports (defaults 11025 / 18025). E2E_KEEP=1 leaves the
 # containers running after a pass, for inspection (removed on the next run).
 set -eu
 cd "$(dirname "$0")/.."
 
 PG=snowprint-e2e-pg
 APP=snowprint-e2e-app
+MAIL=snowprint-e2e-mail
+MAIL_IMAGE=axllent/mailpit:v1.27.0
+SMTP_PORT="${E2E_SMTP_PORT:-11025}"
+MAIL_API_PORT="${E2E_MAIL_API_PORT:-18025}"
 IMAGE=snowprint-analytics:e2e
 PG_IMAGE="${E2E_PG_IMAGE:-postgres:18-alpine}"
 PORT="${E2E_PORT:-17669}"
@@ -23,7 +28,7 @@ GEO_PORT="${E2E_GEO_PORT:-17690}"
 GEO_PID=""
 
 cleanup() {
-    docker rm -f "$APP" "$PG" >/dev/null 2>&1 || true
+    docker rm -f "$APP" "$PG" "$MAIL" >/dev/null 2>&1 || true
     rm -f "$ENV_FILE"
     rm -rf "$GEO_DIR"
     [ -n "$GEO_PID" ] && kill "$GEO_PID" 2>/dev/null || true
@@ -49,6 +54,10 @@ until docker exec "$PG" pg_isready -q -h 127.0.0.1 -U postgres; do
     i=$((i + 1)); [ "$i" -le 60 ] || fail "PostgreSQL did not start"; sleep 1
 done
 
+# The user's SMTP server for invite emails: Mailpit, published on host ports.
+echo "==> SMTP server ($MAIL_IMAGE) on host port $SMTP_PORT"
+docker run -d --name "$MAIL" -p "$SMTP_PORT:1025" -p "$MAIL_API_PORT:8025" "$MAIL_IMAGE" >/dev/null
+
 echo "==> README step 1: create the role and database"
 docker exec -i "$PG" psql -q -v ON_ERROR_STOP=1 -U postgres <<'SQL'
 CREATE ROLE snowprint LOGIN PASSWORD 'e2e-secret';
@@ -64,6 +73,10 @@ SNOWPRINT_TRUST_PROXY=true
 SNOWPRINT_GEOIP_DOWNLOAD=dbip-city-lite
 SNOWPRINT_GEOIP_DOWNLOAD_BASE_URL=http://host.docker.internal:$GEO_PORT
 SNOWPRINT_PUBLIC_URL=https://stats.e2e.test/
+SNOWPRINT_SMTP_HOST=host.docker.internal
+SNOWPRINT_SMTP_PORT=$SMTP_PORT
+SNOWPRINT_SMTP_ENCRYPTION=none
+SNOWPRINT_SMTP_FROM=stats@e2e.test
 ENV
 # README "GeoIP" (automatic download): a local mirror serves MaxMind's public test
 # database as last month's DB-IP file only, so the "this month is not published
@@ -215,9 +228,15 @@ echo "==> Sites, users and invites"
 case "$(ui PATCH /api/ui/sites/tz.test '{"retention_days":30}')" in "200 "*'"retention_days":30'*) ;; *) fail "site settings" ;; esac
 case "$(ui PATCH /api/ui/sites/tz.test '{"retention_days":-1}')" in "400 "*) ;; *) fail "negative retention accepted" ;; esac
 console site:set example.com retention 400 | grep -q '"retention_days": \{0,1\}400' || fail "console site:set"
-invite=$(ui POST /api/ui/invites '{"email":"viewer@example.com","sites":{"example.com":"viewer"}}')
+case "$(ui POST /api/ui/invites '{"email":"x@example.com","sites":{"example.com":"viewer"},"dashboard_url":"javascript:x"}')" in
+    "400 "*) ;; *) fail "invite accepted a non-http dashboard_url" ;; esac
+invite=$(ui POST /api/ui/invites '{"email":"viewer@example.com","sites":{"example.com":"viewer"},"dashboard_url":"https://dash.e2e.test"}')
 token=$(echo "$invite" | sed -n 's/.*"token":"\([0-9a-f]*\)".*/\1/p')
 [ -n "$token" ] || fail "invite: $invite"
+case "$invite" in *'"emailed":true'*) ;; *) fail "invite was not emailed: $invite" ;; esac
+mail=$(curl -fsS "http://localhost:$MAIL_API_PORT/api/v1/message/latest") || fail "no invite email in Mailpit"
+case "$mail" in *'viewer@example.com'*"https://dash.e2e.test/ui/#/invite/$token"*) ;; *) fail "invite email: $mail" ;; esac
+case "$mail" in *'stats@e2e.test'*) ;; *) fail "invite email sender: $mail" ;; esac
 ADMIN_JAR="$JAR"; JAR="$(mktemp)"
 case "$(ui POST /api/ui/invite "{\"token\":\"$token\"}")" in "200 "*'viewer@example.com'*) ;; *) fail "invite lookup" ;; esac
 case "$(ui POST /api/ui/invite/accept "{\"token\":\"$token\",\"name\":\"Vic\",\"password\":\"viewer password 1\"}")" in
@@ -355,4 +374,4 @@ until curl -s "http://localhost:$PORT/api/system/health" | grep -q '"status":"UP
     i=$((i + 1)); [ "$i" -le 30 ] || fail "/health did not recover after PostgreSQL came back"; sleep 1
 done
 
-echo "PASS: migrated ($partitions events partitions), tracking stored and anonymised, sessions assigned, rollups and retention, MCP tools and auth, dashboard app, API and sign-in, site settings, invites and roles, share links, Prometheus metrics, everything under /api/, health UP, DOWN and recovered with PostgreSQL, /api/status OK, container healthy"
+echo "PASS: migrated ($partitions events partitions), tracking stored and anonymised, sessions assigned, rollups and retention, MCP tools and auth, dashboard app, API and sign-in, site settings, invites (emailed) and roles, share links, Prometheus metrics, everything under /api/, health UP, DOWN and recovered with PostgreSQL, /api/status OK, container healthy"

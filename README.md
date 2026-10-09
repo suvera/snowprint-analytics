@@ -154,6 +154,11 @@ Edit `.env`:
 | `SNOWPRINT_REQUEST_TRACE` | `true` | Optional, default `false`. Log one line per request: method, path, status, duration |
 | `SNOWPRINT_JSON_PRETTY` | `true` | Optional, default `false`. Indent JSON API responses |
 | `SNOWPRINT_PUBLIC_URL` | `https://stats.example.com` | Optional. Public base URL that websites load `/snow.js` from and send events to; used in the dashboard's tracking snippet. Default: the address the dashboard is opened on |
+| `SNOWPRINT_SMTP_HOST` | `smtp.example.com` | Optional. SMTP server that emails invite links. Not set: admins copy the links themselves |
+| `SNOWPRINT_SMTP_PORT` | `587` | Optional, default `587` |
+| `SNOWPRINT_SMTP_ENCRYPTION` | `ssl` | Optional, default `starttls` (port 587). `ssl` for implicit TLS (port 465), `none` only for a relay on a trusted network |
+| `SNOWPRINT_SMTP_USER` / `SNOWPRINT_SMTP_PASSWORD` | `stats@example.com` | Optional. SMTP login (`AUTH LOGIN`); leave unset for a relay without login |
+| `SNOWPRINT_SMTP_FROM` | `Stats <stats@example.com>` | Optional. Sender address. Default: the SMTP user |
 
 - PostgreSQL on the **same machine** as Docker: use `host=host.docker.internal` and add
   `--add-host=host.docker.internal:host-gateway` to `docker run` (step 3).
@@ -237,8 +242,9 @@ the snippet, and deletes the site with its data. New sites start receiving event
 
 The first visitor creates the admin account. Admins invite others under **Users → Invite a
 user**: choose admin (everything) or a role per site, **viewer** (reports) or **admin**
-(reports, goals and the site's settings). Snowprint sends no email: copy the invite link to
-the person. It works once, for 7 days.
+(reports, goals and the site's settings). With `SNOWPRINT_SMTP_HOST` set, Snowprint emails
+the invite link; either way the admin sees the link once and can copy it. It works once, for
+7 days.
 
 ### Share links
 

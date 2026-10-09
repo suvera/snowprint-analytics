@@ -45,6 +45,17 @@ ingress:
   # annotations:
   #   cert-manager.io/cluster-issuer: letsencrypt
 
+# Email invite links through your SMTP server (else admins copy them):
+#   kubectl -n snowprint create secret generic snowprint-smtp --from-literal=password='...'
+# mail:
+#   host: smtp.example.com
+#   port: 587
+#   encryption: starttls             # ssl for port 465
+#   username: stats@example.com
+#   from: "Stats <stats@example.com>"   # default: the username
+#   existingSecret: snowprint-smtp
+#   existingSecretPasswordKey: password
+
 # Countries/regions/cities. Easiest: download DB-IP Lite when pods start.
 # geoip:
 #   download: dbip-city-lite           # or dbip-country-lite

@@ -98,6 +98,18 @@ snowprint:
   ui:
     # Mark the dashboard session cookie Secure. Set true when served over HTTPS.
     secureCookies: $env.SNOWPRINT_SECURE_COOKIES || false
+  mail:
+    # SMTP server for invite emails. Empty host: nothing is emailed and admins
+    # copy invite links themselves.
+    host: $env.SNOWPRINT_SMTP_HOST || ''
+    port: $env.SNOWPRINT_SMTP_PORT || 587
+    # starttls (port 587), ssl (implicit TLS, port 465) or none (local relay only).
+    encryption: $env.SNOWPRINT_SMTP_ENCRYPTION || starttls
+    username: $env.SNOWPRINT_SMTP_USER || ''
+    password: $env.SNOWPRINT_SMTP_PASSWORD || ''
+    # Sender: an address ("Snowprint" is the name) or "Name <address>".
+    # Empty: the username.
+    from: $env.SNOWPRINT_SMTP_FROM || ''
   geoip:
     # Path to a MaxMind-format .mmdb file (DB-IP Lite City or GeoLite2 City).
     # Empty: no country/region/city.

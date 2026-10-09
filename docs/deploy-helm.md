@@ -88,6 +88,7 @@ password. `deploy/deploy.sh` refuses to run without it. The settings that matter
 | `publicUrl` | `https://stats.example.com` | public tracking URL for snippets; a different host is added to the Ingress (tracker paths only) |
 | `requestTrace`, `jsonPrettyPrint` | `false` | debugging: per-request log line, indented JSON |
 | `secureCookies` | `true` | Secure dashboard cookie; set `false` only for plain-HTTP tests |
+| `mail.host`, `mail.port`, `mail.username`, `mail.from`, `mail.existingSecret` | `smtp.example.com`, `587`, `stats@example.com`, , `snowprint-smtp` | optional SMTP server that emails invite links; the password comes from the Secret |
 | `geoip.download` | `dbip-city-lite` | locations: download DB-IP Lite (free) when each pod starts; credited in the dashboard |
 | `geoip.existingClaim`, `geoip.file` | `snowprint-geoip`, `dbip-city-lite.mmdb` | or your own GeoIP database on a PVC |
 

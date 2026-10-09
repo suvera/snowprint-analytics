@@ -49,6 +49,20 @@ database:
 # the Ingress also routes that host (tracker paths only: /snow.js, /api/event).
 publicUrl: ""
 
+# SMTP server for invite emails. Empty host: admins copy invite links themselves.
+mail:
+  host: ""
+  port: 587
+  # starttls (587), ssl (implicit TLS, 465) or none (local relay only)
+  encryption: starttls
+  username: ""
+  # Sender address; empty: the username.
+  from: ""
+  # Secret holding the SMTP password, e.g.
+  # kubectl -n snowprint create secret generic snowprint-smtp --from-literal=password=...
+  existingSecret: ""
+  existingSecretPasswordKey: password
+
 # Behind an ingress or Cloudflare Tunnel the client IP arrives in a header
 # (CF-Connecting-IP, X-Forwarded-For or X-Real-IP, in that order of preference).
 trustProxy: true
