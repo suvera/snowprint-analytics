@@ -12,7 +12,8 @@ One PHP container plus Postgres. No cookies. Ask your traffic questions from Cla
 > traffic without being able to follow any one person.
 
 > [!WARNING]
-> **Pre-alpha.** Snowprint is in early development and is not usable yet. Follow the
+> **Pre-alpha.** Snowprint tracks, reports and answers MCP queries (see the live instance
+> below), but there is no release yet: expect breaking changes until 1.0. Follow the
 > [roadmap](#roadmap) or watch the repo for the first release.
 
 **Live instance:** [snowprint.suvera.xyz/ui](https://snowprint.suvera.xyz/ui/), a real Snowprint
@@ -27,43 +28,44 @@ Sign-in is required for now; a public read-only dashboard comes with shareable l
 
 - **One container + your PostgreSQL.** Point it at the PostgreSQL you already run,
   paste a ~1 KB script, done. No ClickHouse, no cron, no queue to babysit.
-- **Cookie-less by design.** No cookies, no localStorage, no IP addresses stored.
-  Built to need no consent banner.
+- **Cookie-less by design.** No cookies, no localStorage, no IP addresses or user agents
+  stored. Designed to store no personal data; see [Privacy](docs/privacy.md) for exactly what
+  is kept, and check your own legal obligations.
 - **MCP built in.** A Model Context Protocol server ships in the box, so Claude
   (Desktop or Code) or any MCP client can query your analytics with a scoped API key.
 - **Built on Winter Boot.** Long-running, Spring-Boot-style PHP services: dependency
-  injection, REST controllers, async batching, scheduling, transactions, migrations and
-  health checks all come from the framework. Target: 10,000+ events/s on 2 vCPUs, with
+  injection, REST controllers, scheduling, sessions, migrations, metrics and health
+  checks all come from the framework. Target: 10,000+ events/s on 2 vCPUs, with
   a reproducible benchmark in the repo.
-- **Leave Matomo without losing your data.** Matomo tracker compatibility, a raw-log
-  importer, and an honest list of what does not carry over.
-- **Microservices by heart.** One image, four roles (`web`, `ingest`, `worker`,
-  `importer`). Run them all in one process, or scale each role on its own: the
-  difference is configuration, not code.
+- **Leave Matomo without losing your data** (planned for v1.0). Matomo tracker
+  compatibility, an importer, and an honest list of what does not carry over.
+- **Microservices by heart.** One image, three roles (`web`, `ingest`, `worker`; an
+  `importer` role comes with the Matomo migration). Run them all in one process, or scale
+  each role on its own: the difference is configuration, not code.
 
 ## Built on Winter Boot
 
 Snowprint is a real-world, production-shaped application of [Winter Boot](https://github.com/suvera/winter-boot), a Spring-Boot-style
 framework for long-running PHP 8.5 microservices. It is not a PHP-FPM app with a queue
-bolted on: every part of Snowprint maps to a Winter Boot feature.
+bolted on: each part of Snowprint maps to a Winter Boot feature.
 
 | Snowprint needs | Winter Boot provides |
 |---|---|
-| Tracking and dashboard endpoints | `#[RestController]`, `#[PostMapping]`, `#[RequestBody]` |
-| Batched event writes | `#[Async]` services and `PdbcTemplate::batchUpdate` |
-| Daily rollups, retention, salt rotation | `#[Scheduled]` jobs, safe on several workers (idempotent or advisory locks) |
-| Fast dashboards | `#[Cacheable]` / `#[CacheEvict]` |
-| Sites, goals, users | `#[Transactional]` |
-| Logins and API keys | `HandlerInterceptor` and coroutine-safe `SessionManager` |
-| MCP tool registry | Custom AOP stereotype (`#[McpTool]`) |
+| Tracking, dashboard and MCP endpoints | `#[RestController]`, `#[GetMapping]`, `#[PostMapping]`, … |
+| Batched event writes | Swoole worker start/stop hooks for a per-worker buffer, `PdbcTemplate` multi-row inserts |
+| Sessions, daily rollups, retention, salt rotation | `#[Scheduled]` jobs, safe on several workers (idempotent or advisory locks) |
+| Dashboard sign-in | Coroutine-safe `SessionManager` with `PdbcSessionStore` |
+| Operator API, request guards | `HandlerInterceptor` in a `WebMvcConfigurer` |
 | Zero-touch upgrades | Built-in SQL migrator |
-| Docker health checks, metrics, traces | Actuator, Prometheus, OpenTelemetry |
-| Redis / Kafka / OpenSearch scaling tiers | Winter Boot modules, switched on in `application.yml` |
-| One image, four roles | One `#[WinterBootApplication]` starter per role, shared beans |
+| Health checks and metrics | Actuator (`#[HealthInformer]`), Prometheus registry |
+| One image, three roles | One `#[WinterBootApplication]` starter per role, shared beans |
+
+Planned: `#[Cacheable]` dashboards, OpenTelemetry traces, and Redis / Kafka / OpenSearch
+tiers through Winter Boot modules switched on in `application.yml`.
 
 If you want to see how a Winter Boot service is structured end to end, this repo is
-meant to be a readable example. Reusable pieces (the MCP tool attribute, the ingest
-buffer) are candidates to upstream into Winter Boot modules.
+meant to be a readable example. Reusable pieces (the ingest buffer) are candidates to
+upstream into Winter Boot.
 
 ## How it compares
 
@@ -73,11 +75,9 @@ buffer) are candidates to upstream into Winter Boot modules.
 | What you run | App + Postgres + ClickHouse | App + Postgres | PHP-FPM + web server + MySQL + cron | **1 container + your Postgres** |
 | Cookie-less by default | Yes | Yes | Optional | **Yes** |
 | Built-in MCP server | No | No | No | **Yes** |
-| Matomo migration | No | No | n/a | **Tracker compat + importer** |
+| Matomo migration | No | No | n/a | **Tracker compat + importer (planned, v1.0)** |
 
 ## Install
-
-> Snowprint does not track anything yet. These steps start the skeleton service.
 
 Snowprint is **one container that connects to your own PostgreSQL**. It does not ship or
 manage a database for you.
@@ -284,6 +284,9 @@ without their arguments. Manage keys with `key:list` and `key:revoke <id>`.
   source, country and so on, which are kept. Unfiltered reports keep working for any
   period; filtered reports and goals need raw events, so they cover the retention period.
 
+[docs/privacy.md](docs/privacy.md) lists every stored field, retention, logs, and what this
+means for requests from visitors.
+
 ## Development
 
 Snowprint is a [Winter Boot](https://github.com/suvera/winter-boot) application. Requirements: PHP 8.5, see [`Installation Guide`](https://suvera.github.io/winter-boot/installation/) ; Composer; Postgres 15+. The Docker image
@@ -339,10 +342,9 @@ src/            PHP namespace dev\suvera\snowprint
   privacy/      daily salt rotation, visitor hashing
   rollup/       scheduled jobs: sessionizer, daily rollups, retention, partitions
   query/        reporting queries shared by the dashboard and MCP
-  web/          dashboard, management API, auth, share links
+  web/          dashboard API, sign-in, users, operator API
   mcp/          MCP endpoint and tools
   site/         sites, users, roles, API keys, goals
-  matomo/       Matomo tracker compatibility and importer
 ui/             dashboard: React + TypeScript (Vite), built into public/ui/
 public/         served as-is by Swoole: snow.js (the tracker), ui/ (built dashboard)
 tests/          PHPUnit tests, tracker tests (Node), e2e.sh: the documented install end to end
@@ -354,11 +356,10 @@ bench/          ingest benchmark harness
 | Milestone | Scope |
 |---|---|
 | M0 spike | Ingest path, batched writes, published benchmark |
-| M1 MVP | Tracking script, dashboard, goals, MCP tools, Docker image |
+| M1 MVP | Tracking script, dashboard, goals, users, rollups and retention, MCP tools, Docker image, Helm chart |
 | M2 launch | Public benchmarks and docs |
 | v1.0 | Matomo tracker compatibility and importer, public dashboards, email reports, Redis tier |
 | v1.1 | Basic ecommerce, Matomo Reporting API subset, Kafka/OpenSearch tiers, WordPress plugin |
-
 
 ## Contributing
 
@@ -368,3 +369,7 @@ To report a security problem, see [SECURITY.md](SECURITY.md).
 ## License
 
 [MIT](LICENSE) © 2026 Suvera
+
+Matomo is a registered trademark of InnoCraft Ltd. Plausible and Umami are trademarks of
+their owners. Snowprint is an independent project, not affiliated with or endorsed by any of
+them; their names are used only to describe compatibility and comparisons.
