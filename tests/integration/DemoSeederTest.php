@@ -60,9 +60,10 @@ final class DemoSeederTest extends TestCase {
             'every finished day is rolled up');
 
         // PRD §7.5: find_anomalies reports Wednesday as a drop.
-        $anomalies = $stats->anomalies($site, Period::parse('2026-10-12..2026-10-16', 'UTC', $now), Filters::none());
+        $anomalies = $stats->anomalies($site, Period::parse('14d', 'UTC', $now), Filters::none(), 2.0, 28, $now);
         self::assertSame('2026-10-14', $anomalies[0]['date'] ?? null, json_encode($anomalies));
         self::assertSame('drop', $anomalies[0]['direction']);
+        self::assertNotContains('2026-10-20', array_column($anomalies, 'date'), 'today, still filling up, is no anomaly');
 
         $this->expectException(InvalidInput::class);
         $seeder->seed($site, 35, 300, 1, $now);

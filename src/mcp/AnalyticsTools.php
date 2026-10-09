@@ -150,7 +150,8 @@ class AnalyticsTools {
         name: 'find_anomalies',
         title: 'Unusual days',
         description: 'Days in the period whose visitors deviate from the mean of the preceding 28 days by at least '
-            . '"sigma" standard deviations (spike or drop). Follow up with get_breakdown on that date to find the cause.',
+            . '"sigma" standard deviations (spike or drop). Today is left out until it ends. '
+            . 'Follow up with get_breakdown on that date to find the cause.',
         inputSchema: ['type' => 'object', 'required' => ['site'], 'properties' => [
             'site' => self::SITE, 'period' => self::PERIOD + ['default' => '30d'],
             'sigma' => ['type' => 'number', 'minimum' => 1, 'maximum' => 5, 'default' => 2],

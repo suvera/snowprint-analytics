@@ -193,8 +193,11 @@ class StatsQuery {
      * noise, and at least MIN_ANOMALY_DIFF visitors away from the mean).
      * @return list<array{date: string, visitors: int, baseline_mean: float, baseline_stddev: float, z_score: float, direction: string}>
      */
-    public function anomalies(int $siteId, Period $period, Filters $filters, float $sigma = 2.0, int $baselineDays = 28): array {
+    public function anomalies(int $siteId, Period $period, Filters $filters, float $sigma = 2.0, int $baselineDays = 28,
+                              ?\DateTimeImmutable $now = null): array {
         $tz = $period->timezone->getName();
+        // Today is still filling up: it would always look like a drop.
+        $today = ($now ?? new \DateTimeImmutable('now'))->setTimezone($period->timezone)->format('Y-m-d');
         $from = $period->start->setTimezone($period->timezone)->modify("-$baselineDays days")->format('Y-m-d');
         $to = $period->end->setTimezone($period->timezone)->modify('-1 second')->format('Y-m-d');
         $daily = $this->timeseries($siteId, Period::parse("$from..$to", $tz), $filters, 'visitors', 'day');
@@ -202,7 +205,7 @@ class StatsQuery {
         $anomalies = [];
         $periodStart = $period->start->setTimezone($period->timezone)->format('Y-m-d');
         foreach ($daily as $i => $day) {
-            if ($day['date'] < $periodStart || $i < 7) {
+            if ($day['date'] < $periodStart || $day['date'] >= $today || $i < 7) {
                 continue;
             }
             $window = array_column(array_slice($daily, max(0, $i - $baselineDays), min($i, $baselineDays)), 'value');
