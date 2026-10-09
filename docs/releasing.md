@@ -1,15 +1,8 @@
 # Releasing Snowprint
 
-Images are published to Docker Hub as `suvera/snowprint` by
-[`.github/workflows/release.yml`](../.github/workflows/release.yml) when a version tag is
-pushed. Nothing is published from a laptop.
-
-## One-time setup
-
-In the GitHub repository settings, add the secrets `DOCKERHUB_USERNAME` and
-`DOCKERHUB_TOKEN` (a Docker Hub access token with write access to the image). To publish
-somewhere else, set the repository variable `DOCKERHUB_IMAGE` (for example
-`yourname/snowprint`).
+Images are built and pushed to Docker Hub (`suvera/snowprint`) from a maintainer's machine
+with [`docker/build.sh`](../docker/build.sh), the same way Winter Boot publishes
+`suvera/winter-boot`. CI only tests; it never publishes.
 
 ## Cutting a release
 
@@ -19,24 +12,24 @@ somewhere else, set the repository variable `DOCKERHUB_IMAGE` (for example
      when the chart changed.
 2. In `CHANGELOG.md`, rename `[Unreleased]` to `[0.1.0] - YYYY-MM-DD` and start a new empty
    `[Unreleased]` section.
-3. Commit, wait for CI to pass, then tag and push:
+3. Commit, wait for CI to pass, then tag and push the tag:
 
    ```bash
    git tag -a v0.1.0 -m "Snowprint 0.1.0"
    git push origin v0.1.0
    ```
 
-The workflow then:
+4. Build and push the image (needs `docker login` as an account that can push to
+   `suvera/snowprint`, once per machine):
 
-1. checks that the tag, `winter.application.version` and `appVersion` are the same;
-2. runs `tests/e2e.sh`;
-3. builds the image on native amd64 and arm64 runners and pushes `0.1.0-amd64` and
-   `0.1.0-arm64`;
-4. publishes the multi-arch tags `0.1.0`, `0.1` and `latest`. A pre-release such as
-   `v0.2.0-rc.1` gets only its own tag.
+   ```bash
+   SNOWPRINT_IMAGE=suvera/snowprint docker/build.sh --push
+   ```
+
+   It builds `suvera/snowprint:0.1.0` and `:latest` for your machine's architecture and
+   pushes both. For `suvera/snowprint` it refuses `-dev` versions and a dirty working tree.
+   `SNOWPRINT_IMAGE` is needed when `deploy/values.local.yaml` exists, because the script
+   otherwise pushes to the registry your own cluster pulls from.
 
 Afterwards set the version in `config/application.yml` and `appVersion` to the next
 development version (for example `0.2.0-dev`).
-
-`docker/build.sh --push` still builds and pushes a single-architecture image from your
-machine, for private registries such as the one your own cluster pulls from.

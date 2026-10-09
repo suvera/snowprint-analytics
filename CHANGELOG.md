@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Removed
+- The tag-triggered GitHub Actions image release. Images are pushed with
+  `docker/build.sh --push` (docs/releasing.md).
+
 ## [0.1.0] - 2026-10-09
 
 First release (pre-alpha). Everything below is new.
