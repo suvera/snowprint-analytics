@@ -6,7 +6,9 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
-First release candidate. Everything below is new.
+## [0.1.0] - 2026-10-09
+
+First release (pre-alpha). Everything below is new.
 
 ### Added
 - Tracking: `snow.js` (no cookies, under 1.5 KB gzipped, SPA aware, custom events),

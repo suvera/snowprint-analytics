@@ -30,7 +30,7 @@ winter:
   application:
     name: snowprint
     id: snowprint
-    version: 0.1.0-dev
+    version: 0.1.0
   web:
     request:
       # Log "TRACE START/FINISH <method> <uri> -> <status> (<ms> ms)" for every request.
