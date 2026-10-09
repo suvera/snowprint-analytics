@@ -19,7 +19,7 @@ First release candidate. Everything below is new.
 - Users with per-site roles (viewer, admin) invited by single-use links; site settings and
   deletion; getting-started notice for sites without data.
 - Public share links: read-only dashboards without an account, optional password.
-- Built-in MCP server at `/mcp` with API keys, analytics tools, resources and prompts.
+- Built-in MCP server at `/api/mcp` with API keys, analytics tools, resources and prompts.
 - Operator console `bin/console.sh` (sites, goals, API keys, share links, jobs).
 - Roles `all`, `web`, `ingest`, `worker`; Helm chart with single and split modes.
 - Prometheus metrics, health and status endpoints.
