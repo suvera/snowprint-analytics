@@ -68,7 +68,7 @@ class DemoSeeder {
     private GoalService $goals;
 
     /** @return array{events: int, days: int, goals: int} */
-    public function seed(int $siteId, int $days = 35, int $visitorsPerDay = 300, int $seed = 7669, ?\DateTimeImmutable $now = null): array {
+    public function seed(int $siteId, int $days = 60, int $visitorsPerDay = 300, int $seed = 7669, ?\DateTimeImmutable $now = null): array {
         $site = $this->sites->find($siteId) ?? throw new InvalidInput('unknown site');
         if ($this->sites->hasData($siteId)) {
             throw new InvalidInput($site['domain'] . ' already has data; demo data only goes into an empty site');

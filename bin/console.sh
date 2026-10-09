@@ -21,7 +21,7 @@
 #   share:list <domain>
 #   share:delete <domain> <id>
 #   demo:seed <domain> [days]             fill an EMPTY site with synthetic demo traffic
-#                                          (default 35 days; for trying Snowprint out)
+#                                          (default 60 days; for trying Snowprint out)
 #   rollup:run                            roll up finished days now (the worker does it every 10 min)
 #   retention:run                         delete raw events past retention now (the worker does it hourly)
 #   help
@@ -116,7 +116,7 @@ case "$cmd" in
         ;;
     demo:seed)
         [ $# -ge 1 ] || die "usage: demo:seed <domain> [days]"
-        days="${2:-35}"
+        days="${2:-60}"
         case "$days" in ''|*[!0-9]*) die "days must be a number" ;; esac
         call POST "/api/admin/sites/$(safe "$1")/demo-data" "{\"days\":$days}"
         ;;

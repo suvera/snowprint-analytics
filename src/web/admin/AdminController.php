@@ -168,12 +168,12 @@ class AdminController {
         });
     }
 
-    /** Body: {"days": 35}. Fills an empty site with synthetic demo traffic (SP-040). */
+    /** Body: {"days": 60}. Fills an empty site with synthetic demo traffic (SP-040). */
     #[PostMapping(path: '/api/admin/sites/{domain}/demo-data')]
     public function seedDemo(HttpRequest $request, #[PathVariable] string $domain): ResponseEntity {
         return self::guard(function () use ($request, $domain) {
             $site = $this->sites->findByDomain($domain) ?? throw new InvalidInput('unknown site: ' . $domain);
-            $days = filter_var(self::json($request)['days'] ?? 35, FILTER_VALIDATE_INT);
+            $days = filter_var(self::json($request)['days'] ?? 60, FILTER_VALIDATE_INT);
             if ($days === false) {
                 throw new InvalidInput('days must be a whole number');
             }

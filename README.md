@@ -20,7 +20,10 @@ One PHP container plus Postgres. No cookies. Ask your traffic questions from Cla
 **Live instance:** [snowprint.suvera.xyz/ui](https://snowprint.suvera.xyz/ui/), a real Snowprint
 deployment on Kubernetes tracking the [Winter Boot documentation](https://suvera.github.io/winter-boot/).
 
-![Snowprint dashboard: overview with visitors, visits, pageviews, bounce rate and visit duration, a traffic chart, and top sources, pages, locations and devices](docs/images/dashboard.jpg)
+![Snowprint dashboard tour: overview with visitors, visits, pageviews, bounce rate and visit duration and a traffic chart, then the sources, locations and events reports](docs/images/dashboard.gif)
+
+<sub>Synthetic data from `bin/console.sh demo:seed`. Still screenshot:
+[docs/images/dashboard.jpg](docs/images/dashboard.jpg).</sub>
 
 ---
 
@@ -212,8 +215,8 @@ docker exec snowprint bin/console.sh site:set example.com retention 365  # raw e
 docker exec snowprint bin/console.sh help
 ```
 
-To look around before you have traffic, `bin/console.sh demo:seed demo.example 35` fills a
-new, empty site with 35 days of synthetic visits (it refuses sites that have data).
+To look around before you have traffic, `bin/console.sh demo:seed demo.example` fills a
+new, empty site with 60 days of synthetic visits (it refuses sites that have data).
 
 A site's **Settings** page changes its timezone and raw-event retention (default 90 days), shows
 the snippet, and deletes the site with its data. New sites start receiving events within 30 seconds. Then add this to every page
