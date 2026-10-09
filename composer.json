@@ -30,7 +30,7 @@
         "ext-swoole": "*",
         "matomo/device-detector": "^6.4",
         "maxmind-db/reader": "^1.12",
-        "suvera/winter-boot": "^2.1.3"
+        "suvera/winter-boot": "^2.1.4"
     },
     "require-dev": {
         "phpunit/phpunit": "^12.0"

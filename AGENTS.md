@@ -240,14 +240,14 @@ user agents, API keys, or MCP tool arguments containing free text.
 
 ## Winter Boot Version
 
-Winter Boot comes from Packagist (`suvera/winter-boot: ^2.1.3`, exact version in
+Winter Boot comes from Packagist (`suvera/winter-boot: ^2.1.4`, exact version in
 `composer.lock`); the native extension and the migrator PHAR are built from that package.
 To try framework changes locally, add a temporary Composer path repository pointing at a
 winter-boot checkout and do not commit it. `minimum-stability` stays `dev` because Winter
-Boot 2.1.3 requires `suvera/monolog-cascade: dev-master`.
+Boot 2.1.4 requires `suvera/monolog-cascade: dev-master`.
 
-Snowprint uses Winter Boot **2.1.3** (case-insensitive headers, coroutine-safe KV client,
+Snowprint uses Winter Boot **2.1.4** (case-insensitive headers, coroutine-safe KV client,
 dotted routes, `$env` port typing, worker hooks `#[OnWorkerStart]` / `#[OnWorkerStop]`,
 `/api/system/health` answers 503 when DOWN, metrics recorded before the first scrape, compact JSON
-and 10 pooled connections per worker by default). Report new framework issues in
+and closed pool connections that really disconnect; Snowprint caps the pool at 4). Report new framework issues in
 `TASKS.md` under "Winter Boot upstream list".
