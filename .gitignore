@@ -5,6 +5,7 @@ composer.phar
 # Local working documents (not published)
 /TASKS.md
 /docs/PRD.md
+/docs/launch/
 
 # Environment and secrets
 .env
