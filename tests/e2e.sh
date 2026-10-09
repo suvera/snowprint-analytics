@@ -211,6 +211,31 @@ case "$(ui GET /api/ui/sites)" in "401 "*) ;; *) fail "logout did not end the se
 case "$(ui POST /api/ui/login '{"email":"admin@example.com","password":"wrong password!"}')" in "401 "*) ;; *) fail "wrong password accepted" ;; esac
 case "$(ui POST /api/ui/login '{"email":"admin@example.com","password":"correct horse battery"}')" in "200 "*) ;; *) fail "login" ;; esac
 case "$(ui GET /api/ui/session)" in "200 "*'"email":"admin@example.com"'*) ;; *) fail "session after login" ;; esac
+
+echo "==> Sites, users and invites"
+case "$(ui PATCH /api/ui/sites/tz.test '{"retention_days":30}')" in "200 "*'"retention_days":30'*) ;; *) fail "site settings" ;; esac
+case "$(ui PATCH /api/ui/sites/tz.test '{"retention_days":-1}')" in "400 "*) ;; *) fail "negative retention accepted" ;; esac
+console site:set example.com retention 400 | grep -q '"retention_days": \{0,1\}400' || fail "console site:set"
+invite=$(ui POST /api/ui/invites '{"email":"viewer@example.com","sites":{"example.com":"viewer"}}')
+token=$(echo "$invite" | sed -n 's/.*"token":"\([0-9a-f]*\)".*/\1/p')
+[ -n "$token" ] || fail "invite: $invite"
+ADMIN_JAR="$JAR"; JAR="$(mktemp)"
+case "$(ui POST /api/ui/invite "{\"token\":\"$token\"}")" in "200 "*'viewer@example.com'*) ;; *) fail "invite lookup" ;; esac
+case "$(ui POST /api/ui/invite/accept "{\"token\":\"$token\",\"name\":\"Vic\",\"password\":\"viewer password 1\"}")" in
+    "200 "*'"is_admin":false'*) ;; *) fail "accepting the invite" ;; esac
+sites=$(ui GET /api/ui/sites)
+case "$sites" in "200 "*'"domain":"example.com"'*'"can_manage":false'*) ;; *) fail "viewer cannot see their site: $sites" ;; esac
+case "$sites" in *tz.test*) fail "viewer sees a site they were not given" ;; esac
+case "$(ui PATCH /api/ui/sites/example.com '{"retention_days":1}')" in "403 "*) ;; *) fail "viewer changed site settings" ;; esac
+case "$(ui GET /api/ui/users)" in "403 "*) ;; *) fail "viewer listed users" ;; esac
+rm -f "$JAR"; JAR="$(mktemp)"
+case "$(ui POST /api/ui/invite/accept "{\"token\":\"$token\",\"name\":\"X\",\"password\":\"viewer password 1\"}")" in
+    "400 "*) ;; *) fail "an invite link worked twice" ;; esac
+rm -f "$JAR"; JAR="$ADMIN_JAR"
+case "$(ui GET /api/ui/users)" in "200 "*'viewer@example.com'*) ;; *) fail "admin cannot list users" ;; esac
+case "$(ui DELETE /api/ui/sites/tz.test '{"confirm":"wrong"}')" in "400 "*) ;; *) fail "site deleted without confirmation" ;; esac
+case "$(ui DELETE /api/ui/sites/tz.test '{"confirm":"tz.test"}')" in "200 "*) ;; *) fail "site delete" ;; esac
+case "$(ui GET /api/ui/sites)" in *tz.test*) fail "deleted site still listed" ;; esac
 rm -f "$JAR"
 
 echo "==> Dashboard app"
@@ -294,4 +319,4 @@ until curl -s "http://localhost:$PORT/api/system/health" | grep -q '"status":"UP
     i=$((i + 1)); [ "$i" -le 30 ] || fail "/health did not recover after PostgreSQL came back"; sleep 1
 done
 
-echo "PASS: migrated ($partitions events partitions), tracking stored and anonymised, sessions assigned, rollups and retention, MCP tools and auth, dashboard app, API and sign-in, Prometheus metrics, everything under /api/, health UP, DOWN and recovered with PostgreSQL, /api/status OK, container healthy"
+echo "PASS: migrated ($partitions events partitions), tracking stored and anonymised, sessions assigned, rollups and retention, MCP tools and auth, dashboard app, API and sign-in, site settings, invites and roles, Prometheus metrics, everything under /api/, health UP, DOWN and recovered with PostgreSQL, /api/status OK, container healthy"

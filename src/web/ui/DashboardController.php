@@ -5,6 +5,7 @@ namespace dev\suvera\snowprint\web\ui;
 
 use dev\suvera\snowprint\query\Filters;
 use dev\suvera\snowprint\query\Period;
+use dev\suvera\snowprint\query\RollupService;
 use dev\suvera\snowprint\query\StatsQuery;
 use dev\suvera\snowprint\site\GoalService;
 use dev\suvera\snowprint\site\InvalidInput;
@@ -12,7 +13,9 @@ use dev\suvera\snowprint\site\SiteService;
 use dev\suvera\snowprint\site\User;
 use dev\winterframework\stereotype\Autowired;
 use dev\winterframework\stereotype\RestController;
+use dev\winterframework\stereotype\web\DeleteMapping;
 use dev\winterframework\stereotype\web\GetMapping;
+use dev\winterframework\stereotype\web\PatchMapping;
 use dev\winterframework\stereotype\web\PathVariable;
 use dev\winterframework\stereotype\web\PostMapping;
 use dev\winterframework\web\http\HttpRequest;
@@ -39,11 +42,19 @@ class DashboardController {
     #[Autowired]
     private StatsQuery $stats;
 
+    #[Autowired]
+    private RollupService $rollups;
+
     #[GetMapping(path: '/api/ui/sites')]
     public function sites(HttpRequest $request): ResponseEntity {
         return self::handle(function () use ($request) {
             $user = $this->user($request);
-            $sites = array_values(array_filter($this->sites->all(), static fn(array $s) => $user->canRead($s['id'])));
+            $sites = [];
+            foreach ($this->sites->all() as $site) {
+                if ($user->canRead($site['id'])) {
+                    $sites[] = $site + ['can_manage' => $user->canManage($site['id'])];
+                }
+            }
             return ResponseEntity::ok()->withJson(['sites' => $sites, 'can_manage' => $user->isAdmin]);
         });
     }
@@ -63,15 +74,59 @@ class DashboardController {
         });
     }
 
-    /** Admins only. Body: {"kind": "pageview"|"event", "match": "/thanks*"|"signup", "name": "..."} */
+    /**
+     * Site admins. Body: {"timezone": "Europe/Berlin", "retention_days": 90}, both optional.
+     * A new timezone rebuilds the rollups of the days whose raw events still exist.
+     */
+    #[PatchMapping(path: '/api/ui/sites/{domain}')]
+    public function updateSite(HttpRequest $request, #[PathVariable] string $domain): ResponseEntity {
+        return self::handle(function () use ($request, $domain) {
+            self::requireUiHeader($request);
+            $user = $this->user($request);
+            $site = $this->site($user, $domain);
+            if (!$user->canManage($site['id'])) {
+                throw new UiError(HttpStatus::$FORBIDDEN, 'only site admins can change settings');
+            }
+            $body = self::body($request);
+            $retention = $body['retention_days'] ?? null;
+            if ($retention !== null && !is_int($retention)) {
+                throw new InvalidInput('retention_days must be a whole number');
+            }
+            $updated = $this->sites->update($site['id'], isset($body['timezone']) ? (string) $body['timezone'] : null, $retention);
+            if ($updated['timezone'] !== $site['timezone']) {
+                $this->rollups->rebuildFromRawEvents($site['id'], $updated['timezone']);
+            }
+            return ResponseEntity::ok()->withJson(['site' => $updated + ['can_manage' => true]]);
+        });
+    }
+
+    /** Instance admins. Body: {"confirm": "<domain>"}. Deletes the site and all its data. */
+    #[DeleteMapping(path: '/api/ui/sites/{domain}')]
+    public function deleteSite(HttpRequest $request, #[PathVariable] string $domain): ResponseEntity {
+        return self::handle(function () use ($request, $domain) {
+            self::requireUiHeader($request);
+            $user = $this->user($request);
+            $site = $this->site($user, $domain);
+            if (!$user->isAdmin) {
+                throw new UiError(HttpStatus::$FORBIDDEN, 'only admins can delete sites');
+            }
+            if ((self::body($request)['confirm'] ?? null) !== $site['domain']) {
+                throw new InvalidInput('type the domain to confirm');
+            }
+            $this->sites->delete($site['id']);
+            return ResponseEntity::ok()->withJson(['deleted' => $site['domain']]);
+        });
+    }
+
+    /** Site admins. Body: {"kind": "pageview"|"event", "match": "/thanks*"|"signup", "name": "..."} */
     #[PostMapping(path: '/api/ui/sites/{domain}/goals')]
     public function createGoal(HttpRequest $request, #[PathVariable] string $domain): ResponseEntity {
         return self::handle(function () use ($request, $domain) {
             self::requireUiHeader($request);
             $user = $this->user($request);
             $site = $this->site($user, $domain);
-            if (!$user->isAdmin) {
-                throw new UiError(HttpStatus::$FORBIDDEN, 'only admins can add goals');
+            if (!$user->canManage($site['id'])) {
+                throw new UiError(HttpStatus::$FORBIDDEN, 'only site admins can add goals');
             }
             $body = self::body($request);
             $goal = $this->goals->create($site['id'], (string) ($body['kind'] ?? ''), (string) ($body['match'] ?? ''),
@@ -172,7 +227,7 @@ class DashboardController {
         return $user;
     }
 
-    /** @return array{id: int, domain: string, timezone: string} */
+    /** @return array{id: int, domain: string, timezone: string, retention_days: int} */
     private function site(User $user, string $domain): array {
         $site = $this->sites->findByDomain($domain);
         if ($site === null || !$user->canRead($site['id'])) {

@@ -13,6 +13,7 @@ use dev\winterframework\util\log\Wlf4p;
  * keep forever; PRD §6.4). Only days that are already rolled up are deleted,
  * so totals survive. Monthly events partitions that are past the retention of
  * every site are dropped whole, which is cheaper than deleting their rows.
+ * Events that arrive for a site after it was deleted are removed here too.
  */
 #[Service]
 class RetentionService {
@@ -39,7 +40,12 @@ class RetentionService {
         }
 
         $dropped = $keepsAll || $cutoffs === [] ? [] : $this->dropPartitionsBefore(min($cutoffs));
+        // Late events of deleted sites (ingest caches the site list for 30 s).
         $deleted = 0;
+        foreach ($this->db->queryForList('SELECT site_id FROM deleted_sites') as $row) {
+            $deleted += $this->db->update('DELETE FROM events WHERE site_id = ?', [(int) $row['site_id']]);
+        }
+        $this->db->update("DELETE FROM deleted_sites WHERE deleted_at < now() - interval '1 day'", []);
         foreach ($cutoffs as $siteId => $cutoff) {
             $deleted += $this->db->update('DELETE FROM events WHERE site_id = ? AND ts < ?', [$siteId, $cutoff->format('c')]);
         }

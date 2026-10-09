@@ -10,6 +10,8 @@ use dev\winterframework\stereotype\Service;
 #[Service]
 class SiteService {
 
+    public const MAX_RETENTION_DAYS = 3650;
+
     #[Autowired]
     private PdbcTemplate $db;
 
@@ -71,7 +73,7 @@ class SiteService {
         return $timezone;
     }
 
-    /** @return array{id: int, domain: string, timezone: string} */
+    /** @return array{id: int, domain: string, timezone: string, retention_days: int} */
     public function create(string $domain, string $timezone = 'UTC'): array {
         $domain = self::normalizeDomain($domain);
         $timezone = self::timezone($timezone);
@@ -83,29 +85,73 @@ class SiteService {
             'INSERT INTO sites (domain, timezone) VALUES (?, ?) RETURNING id',
             [$domain, $timezone]
         );
-        return ['id' => $id, 'domain' => $domain, 'timezone' => $timezone];
+        return ['id' => $id, 'domain' => $domain, 'timezone' => $timezone,
+            'retention_days' => (int) $this->db->queryForScalar('SELECT retention_days FROM sites WHERE id = ?', [$id])];
     }
 
     /** @return list<array{id: int, domain: string, timezone: string, retention_days: int}> */
     public function all(): array {
-        return array_map(static fn(array $r) => [
-            'id' => (int) $r['id'],
-            'domain' => (string) $r['domain'],
-            'timezone' => (string) $r['timezone'],
-            'retention_days' => (int) $r['retention_days'],
-        ], $this->db->queryForList('SELECT id, domain, timezone, retention_days FROM sites ORDER BY domain'));
+        return array_map(self::row(...),
+            $this->db->queryForList('SELECT id, domain, timezone, retention_days FROM sites ORDER BY domain'));
     }
 
-    /** @return array{id: int, domain: string, timezone: string}|null */
+    /** @return array{id: int, domain: string, timezone: string, retention_days: int}|null */
     public function findByDomain(string $domain): ?array {
         try {
             $domain = self::normalizeDomain($domain);
         } catch (InvalidInput) {
             return null;
         }
-        $row = $this->db->queryForList('SELECT id, domain, timezone FROM sites WHERE domain = ?', [$domain])[0] ?? null;
-        return $row === null ? null
-            : ['id' => (int) $row['id'], 'domain' => (string) $row['domain'], 'timezone' => (string) $row['timezone']];
+        $row = $this->db->queryForList('SELECT id, domain, timezone, retention_days FROM sites WHERE domain = ?', [$domain])[0] ?? null;
+        return $row === null ? null : self::row($row);
+    }
+
+    /**
+     * Changes a site's reporting timezone and/or raw-event retention (days,
+     * 0 = forever). The domain is fixed: tracking snippets refer to it.
+     * @return array{id: int, domain: string, timezone: string, retention_days: int}
+     */
+    public function update(int $siteId, ?string $timezone, ?int $retentionDays): array {
+        if ($timezone !== null) {
+            $this->db->update('UPDATE sites SET timezone = ? WHERE id = ?', [self::timezone($timezone), $siteId]);
+        }
+        if ($retentionDays !== null) {
+            $this->db->update('UPDATE sites SET retention_days = ? WHERE id = ?', [self::retentionDays($retentionDays), $siteId]);
+        }
+        $row = $this->db->queryForList('SELECT id, domain, timezone, retention_days FROM sites WHERE id = ?', [$siteId])[0] ?? null;
+        if ($row === null) {
+            throw new InvalidInput('unknown site');
+        }
+        return self::row($row);
+    }
+
+    /**
+     * Deletes a site with all its data: raw events, rollups, goals, user and
+     * API key grants. Events that ingest still accepts in the next seconds
+     * (it caches the site list) are removed by the retention job.
+     */
+    public function delete(int $siteId): void {
+        $this->db->update('INSERT INTO deleted_sites (site_id) VALUES (?) ON CONFLICT (site_id) DO NOTHING', [$siteId]);
+        $this->db->update('DELETE FROM events WHERE site_id = ?', [$siteId]);
+        $this->db->update('DELETE FROM job_watermarks WHERE job = ?', ['rollup:' . $siteId]);
+        $this->db->update('DELETE FROM sites WHERE id = ?', [$siteId]);
+    }
+
+    public static function retentionDays(int $days): int {
+        if ($days < 0 || $days > self::MAX_RETENTION_DAYS) {
+            throw new InvalidInput('retention must be 0 (keep forever) to ' . self::MAX_RETENTION_DAYS . ' days');
+        }
+        return $days;
+    }
+
+    /** @return array{id: int, domain: string, timezone: string, retention_days: int} */
+    private static function row(array $row): array {
+        return [
+            'id' => (int) $row['id'],
+            'domain' => (string) $row['domain'],
+            'timezone' => (string) $row['timezone'],
+            'retention_days' => (int) $row['retention_days'],
+        ];
     }
 
     /** @param list<string> $domains @return list<int> site ids, in input order */

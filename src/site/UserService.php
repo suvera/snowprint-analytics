@@ -8,8 +8,9 @@ use dev\winterframework\stereotype\Autowired;
 use dev\winterframework\stereotype\Service;
 
 /**
- * Dashboard accounts (PRD §6.3): first-run admin, password login with
- * throttling. Passwords are stored as Argon2id hashes.
+ * Dashboard accounts (PRD §6.3): first-run admin, invited users, password
+ * login with throttling, per-site roles. Passwords are stored as Argon2id
+ * hashes.
  */
 #[Service]
 class UserService {
@@ -70,10 +71,100 @@ class UserService {
         if ($row === null) {
             return null;
         }
-        $siteIds = array_map('intval', array_column(
-            $this->db->queryForList('SELECT site_id FROM site_users WHERE user_id = ?', [$id]), 'site_id'));
-        $admin = $row['is_admin'] === true || $row['is_admin'] === 't' || $row['is_admin'] === 1;
-        return new User((int) $row['id'], (string) $row['email'], (string) $row['name'], $admin, $siteIds);
+        $roles = [];
+        foreach ($this->db->queryForList('SELECT site_id, role FROM site_users WHERE user_id = ?', [$id]) as $r) {
+            $roles[(int) $r['site_id']] = (string) $r['role'];
+        }
+        return new User((int) $row['id'], (string) $row['email'], (string) $row['name'], self::bool($row['is_admin']), $roles);
+    }
+
+    /**
+     * Every user with their site roles (by domain), for the users page.
+     * @return list<array{id: int, email: string, name: string, is_admin: bool, sites: array<string, string>, last_login_at: ?string}>
+     */
+    public function all(): array {
+        $roles = [];
+        foreach ($this->db->queryForList(
+            'SELECT su.user_id, s.domain, su.role FROM site_users su JOIN sites s ON s.id = su.site_id ORDER BY s.domain') as $r) {
+            $roles[(int) $r['user_id']][(string) $r['domain']] = (string) $r['role'];
+        }
+        return array_map(static fn(array $r) => [
+            'id' => (int) $r['id'],
+            'email' => (string) $r['email'],
+            'name' => (string) $r['name'],
+            'is_admin' => self::bool($r['is_admin']),
+            'sites' => (object) ($roles[(int) $r['id']] ?? []),
+            'last_login_at' => $r['last_login_at'] === null ? null : (string) $r['last_login_at'],
+        ], $this->db->queryForList('SELECT id, email, name, is_admin, last_login_at FROM users ORDER BY email'));
+    }
+
+    /**
+     * Sets a user's instance-admin flag and site roles (replacing all of them).
+     * The last admin cannot lose admin rights.
+     * @param array<int, string> $siteRoles site id => role
+     */
+    public function updateAccess(int $userId, bool $isAdmin, array $siteRoles): User {
+        $user = $this->find($userId) ?? throw new InvalidInput('unknown user');
+        self::checkRoles($siteRoles);
+        if ($user->isAdmin && !$isAdmin && $this->adminCount() <= 1) {
+            throw new InvalidInput('the last admin cannot lose admin rights');
+        }
+        $this->db->update('UPDATE users SET is_admin = ? WHERE id = ?', [$isAdmin ? 'true' : 'false', $userId]);
+        $this->db->update('DELETE FROM site_users WHERE user_id = ?', [$userId]);
+        $this->grant($userId, $siteRoles);
+        return $this->find($userId);
+    }
+
+    /** Deletes a user; never yourself or the last admin. Their sign-in sessions stop working at once. */
+    public function delete(User $actor, int $userId): void {
+        if ($actor->id === $userId) {
+            throw new InvalidInput('you cannot delete your own account');
+        }
+        $user = $this->find($userId) ?? throw new InvalidInput('unknown user');
+        if ($user->isAdmin && $this->adminCount() <= 1) {
+            throw new InvalidInput('the last admin cannot be deleted');
+        }
+        $this->db->update('DELETE FROM users WHERE id = ?', [$userId]);
+    }
+
+    /** Creates a user from an accepted invite. */
+    public function createInvited(string $email, string $name, string $password, bool $isAdmin, array $siteRoles): User {
+        $email = self::email($email);
+        self::checkPassword($password);
+        if ((int) $this->db->queryForScalar('SELECT count(*) FROM users WHERE email = ?', [$email]) > 0) {
+            throw new InvalidInput('an account with this email already exists; sign in instead');
+        }
+        $id = (int) $this->db->queryForScalar(
+            'INSERT INTO users (email, name, password_hash, is_admin) VALUES (?, ?, ?, ?) RETURNING id',
+            [$email, mb_substr(trim($name), 0, 255), password_hash($password, PASSWORD_ARGON2ID), $isAdmin ? 'true' : 'false']
+        );
+        $this->grant($id, $siteRoles);
+        return $this->find($id);
+    }
+
+    /** @param array<int, string> $siteRoles */
+    public static function checkRoles(array $siteRoles): void {
+        foreach ($siteRoles as $siteId => $role) {
+            if (!is_int($siteId) || !in_array($role, User::ROLES, true)) {
+                throw new InvalidInput('site roles are "viewer" or "admin"');
+            }
+        }
+    }
+
+    /** @param array<int, string> $siteRoles grants for sites that (still) exist */
+    private function grant(int $userId, array $siteRoles): void {
+        foreach ($siteRoles as $siteId => $role) {
+            $this->db->update('INSERT INTO site_users (site_id, user_id, role) SELECT id, ?, ? FROM sites WHERE id = ?',
+                [$userId, $role, $siteId]);
+        }
+    }
+
+    private function adminCount(): int {
+        return (int) $this->db->queryForScalar('SELECT count(*) FROM users WHERE is_admin');
+    }
+
+    private static function bool(mixed $value): bool {
+        return $value === true || $value === 't' || $value === 1 || $value === '1';
     }
 
     public static function email(string $email): string {

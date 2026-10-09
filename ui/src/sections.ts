@@ -12,6 +12,7 @@ export interface Section {
   label: string;
   icon: string;        // SVG path data, 24x24 stroke icon
   tabs?: Tab[];
+  manage?: true;       // only for users who manage the site
 }
 
 export const SECTIONS: Section[] = [
@@ -55,7 +56,16 @@ export const SECTIONS: Section[] = [
   },
   { id: 'events', label: 'Events & goals', icon: 'M5 21V4M5 4h11l-2 4 2 4H5' },
   { id: 'realtime', label: 'Realtime', icon: 'M3 12h4l3-7 4 14 3-7h4' },
+  {
+    id: 'settings', label: 'Settings', manage: true,
+    icon: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 13a7.6 7.6 0 0 0 0-2l2-1.6-2-3.4-2.4 1a7.4 7.4 0 0 0-1.7-1L15 3.5h-4l-.4 2.5a7.4 7.4 0 0 0-1.7 1l-2.4-1-2 3.4 2 1.6a7.6 7.6 0 0 0 0 2l-2 1.6 2 3.4 2.4-1c.5.4 1.1.8 1.7 1l.4 2.5h4l.4-2.5c.6-.2 1.2-.6 1.7-1l2.4 1 2-3.4z',
+  },
 ];
+
+/** The sections a user sees for a site. */
+export function visibleSections(canManage: boolean): Section[] {
+  return SECTIONS.filter((s) => canManage || !s.manage);
+}
 
 export function section(id: string | undefined): Section {
   return SECTIONS.find((s) => s.id === id) ?? SECTIONS[0];

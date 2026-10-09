@@ -23,7 +23,28 @@ export interface Site {
   id: number;
   domain: string;
   timezone: string;
-  retention_days: number;
+  retention_days: number;   // raw events kept this many days; 0 = forever
+  can_manage?: boolean;     // the user may change settings and goals
+}
+
+export type Role = 'viewer' | 'admin';
+export type SiteRoles = Record<string, Role>;   // domain => role
+
+export interface Member {
+  id: number;
+  email: string;
+  name: string;
+  is_admin: boolean;
+  sites: SiteRoles;
+  last_login_at: string | null;
+}
+
+export interface Invite {
+  id: number;
+  email: string;
+  is_admin: boolean;
+  sites: SiteRoles;
+  expires_at: string;
 }
 
 export interface PeriodInfo {
@@ -139,6 +160,20 @@ export const api = {
   logout: () => request<unknown>('POST', '/api/ui/logout'),
   sites: () => request<{ sites: Site[]; can_manage: boolean }>('GET', '/api/ui/sites'),
   addSite: (domain: string, timezone: string) => request<{ site: Site }>('POST', '/api/ui/sites', { domain, timezone }),
+  updateSite: (domain: string, changes: { timezone?: string; retention_days?: number }) =>
+    request<{ site: Site }>('PATCH', `/api/ui/sites/${encodeURIComponent(domain)}`, changes),
+  deleteSite: (domain: string) =>
+    request<unknown>('DELETE', `/api/ui/sites/${encodeURIComponent(domain)}`, { confirm: domain }),
+  users: () => request<{ users: Member[]; invites: Invite[] }>('GET', '/api/ui/users'),
+  updateUser: (id: number, isAdmin: boolean, sites: SiteRoles) =>
+    request<{ user: User }>('PUT', `/api/ui/users/${id}`, { is_admin: isAdmin, sites }),
+  deleteUser: (id: number) => request<unknown>('DELETE', `/api/ui/users/${id}`),
+  invite: (email: string, isAdmin: boolean, sites: SiteRoles) =>
+    request<{ invite: { id: number; token: string; email: string; expires_at: string } }>('POST', '/api/ui/invites', { email, is_admin: isAdmin, sites }),
+  revokeInvite: (id: number) => request<unknown>('DELETE', `/api/ui/invites/${id}`),
+  inviteInfo: (token: string) => request<{ invite: { email: string } }>('POST', '/api/ui/invite', { token }),
+  acceptInvite: (token: string, name: string, password: string) =>
+    request<{ user: User }>('POST', '/api/ui/invite/accept', { token, name, password }),
   addGoal: (domain: string, kind: string, match: string, name: string) =>
     request<{ goal: Goal }>('POST', `/api/ui/sites/${encodeURIComponent(domain)}/goals`, { kind, match, name }),
   overview: (p: ReportParams, signal?: AbortSignal) =>

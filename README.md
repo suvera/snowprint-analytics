@@ -193,10 +193,12 @@ the container:
 ```bash
 docker exec snowprint bin/console.sh site:add example.com Europe/Berlin   # timezone optional
 docker exec snowprint bin/console.sh site:list
+docker exec snowprint bin/console.sh site:set example.com retention 365  # raw events kept (days, 0 = forever)
 docker exec snowprint bin/console.sh help
 ```
 
-New sites start receiving events within 30 seconds. Then add this to every page
+A site's **Settings** page changes its timezone and raw-event retention (default 90 days), shows
+the snippet, and deletes the site with its data. New sites start receiving events within 30 seconds. Then add this to every page
 (Snowprint serves the tracker itself):
 
 ```html
@@ -209,6 +211,13 @@ New sites start receiving events within 30 seconds. Then add this to every page
 - Single-page apps are tracked automatically (History API). `localhost` is ignored unless the
   tag has `data-local`. Browsers sending Do Not Track are not tracked.
 - No cookies, no local storage; under 1.5 KB gzipped.
+
+### Users
+
+The first visitor creates the admin account. Admins invite others under **Users → Invite a
+user**: choose admin (everything) or a role per site, **viewer** (reports) or **admin**
+(reports, goals and the site's settings). Snowprint sends no email: copy the invite link to
+the person. It works once, for 7 days.
 
 ## Ask Claude
 

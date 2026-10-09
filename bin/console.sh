@@ -6,6 +6,8 @@
 # Commands:
 #   site:add <domain> [timezone]          register a site to track (timezone default UTC)
 #   site:list
+#   site:set <domain> timezone <tz> | retention <days>
+#                                          change a site (retention 0 = keep raw events forever)
 #   goal:add <domain> <pageview|event> <path-or-event> [name]
 #                                          conversion goal; paths may end in * (e.g. /thanks*)
 #   key:create <name> <domain,...|all> [--write]
@@ -25,7 +27,7 @@ cd "$(dirname "$0")/.."
 BASE="${SNOWPRINT_CONSOLE_URL:-http://127.0.0.1:7669}"
 TOKEN_FILE="var/operator.token"
 
-usage() { sed -n '2,21p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'; }
 die() { echo "error: $*" >&2; exit 1; }
 
 # Values go inside JSON strings: allow only characters that need no escaping.
@@ -54,6 +56,17 @@ case "$cmd" in
         ;;
     site:list)
         call GET /api/admin/sites
+        ;;
+    site:set)
+        [ $# -eq 3 ] || die "usage: site:set <domain> timezone <tz> | retention <days>"
+        case "$2" in
+            timezone) body="{\"timezone\":\"$(safe "$3")\"}" ;;
+            retention)
+                case "$3" in ''|*[!0-9]*) die "retention must be a number of days" ;; esac
+                body="{\"retention_days\":$3}" ;;
+            *) die "usage: site:set <domain> timezone <tz> | retention <days>" ;;
+        esac
+        call PATCH "/api/admin/sites/$(safe "$1")" "$body"
         ;;
     goal:add)
         [ $# -ge 3 ] || die "usage: goal:add <domain> <pageview|event> <path-or-event> [name]"

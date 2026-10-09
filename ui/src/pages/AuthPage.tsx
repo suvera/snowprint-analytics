@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api, type User } from '../api';
 import { Logo } from '../components/Logo';
 
 interface Props {
-  mode: 'setup' | 'login';
+  mode: 'setup' | 'login' | 'invite';
+  inviteToken?: string;     // mode 'invite': the token from the invite link
   onSignedIn: (user: User) => void;
 }
 
@@ -15,8 +16,17 @@ const POINTS = [
   'Self-hosted: one container on your PostgreSQL',
 ];
 
-/** Sign-in, or first-run creation of the admin account. */
-export function AuthPage({ mode, onSignedIn }: Props) {
+const TEXT = {
+  setup: { title: 'Create your admin account', lead: 'This is a new Snowprint installation. The first account manages everything.',
+    submit: 'Create account', busy: 'Creating account…', meta: 'You can invite teammates later.' },
+  invite: { title: 'Join Snowprint', lead: 'You were invited to this Snowprint dashboard. Choose your name and password.',
+    submit: 'Create account', busy: 'Creating account…', meta: 'Already have an account? Sign in instead.' },
+  login: { title: 'Sign in', lead: 'Welcome back. Sign in to your dashboard.',
+    submit: 'Sign in', busy: 'Signing in…', meta: 'Forgot your password? Ask your Snowprint admin to reset it.' },
+};
+
+/** Sign-in, first-run creation of the admin account, or accepting an invite. */
+export function AuthPage({ mode, inviteToken = '', onSignedIn }: Props) {
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
@@ -24,13 +34,23 @@ export function AuthPage({ mode, onSignedIn }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const setup = mode === 'setup';
+  const invite = mode === 'invite';
+  const creating = setup || invite;
+  const text = TEXT[mode];
+
+  useEffect(() => {
+    if (!invite) return;
+    api.inviteInfo(inviteToken).then((r) => setEmail(r.invite.email)).catch((err) => setError(err.message));
+  }, [invite, inviteToken]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
     setError(null);
     try {
-      const { user } = setup ? await api.setup(email, name, password) : await api.login(email, password);
+      const { user } = setup ? await api.setup(email, name, password)
+        : invite ? await api.acceptInvite(inviteToken, name, password)
+        : await api.login(email, password);
       onSignedIn(user);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');
@@ -64,10 +84,10 @@ export function AuthPage({ mode, onSignedIn }: Props) {
 
       <main className="auth-panel">
         <div className="auth-card">
-          <h1>{setup ? 'Create your admin account' : 'Sign in'}</h1>
-          <p className="lead">{setup ? 'This is a new Snowprint installation. The first account manages everything.' : 'Welcome back. Sign in to your dashboard.'}</p>
+          <h1>{text.title}</h1>
+          <p className="lead">{text.lead}</p>
           <form onSubmit={submit} noValidate={false}>
-            {setup && (
+            {creating && (
               <div className="field">
                 <label htmlFor="name">Name</label>
                 <input id="name" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" placeholder="Ada Lovelace" />
@@ -76,25 +96,25 @@ export function AuthPage({ mode, onSignedIn }: Props) {
             <div className="field">
               <label htmlFor="email">Email</label>
               <input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
-                autoComplete={setup ? 'email' : 'username'} placeholder="you@example.com" autoFocus />
+                readOnly={invite} autoComplete={creating ? 'email' : 'username'} placeholder="you@example.com" autoFocus={!invite} />
             </div>
             <div className="field">
               <label htmlFor="password">Password</label>
               <div className="password-wrap">
-                <input id="password" type={showPassword ? 'text' : 'password'} required minLength={setup ? 10 : undefined}
+                <input id="password" type={showPassword ? 'text' : 'password'} required minLength={creating ? 10 : undefined}
                   value={password} onChange={(e) => setPassword(e.target.value)}
-                  autoComplete={setup ? 'new-password' : 'current-password'} aria-describedby={setup ? 'password-hint' : undefined} />
+                  autoComplete={creating ? 'new-password' : 'current-password'} aria-describedby={creating ? 'password-hint' : undefined} />
                 <button type="button" className="password-toggle" onClick={() => setShowPassword((s) => !s)}
                   aria-label={showPassword ? 'Hide password' : 'Show password'}>{showPassword ? 'Hide' : 'Show'}</button>
               </div>
-              {setup && <span className="hint" id="password-hint">At least 10 characters.</span>}
+              {creating && <span className="hint" id="password-hint">At least 10 characters.</span>}
             </div>
             {error && <div className="error" role="alert">{error}</div>}
-            <button className="btn btn-primary btn-block" type="submit" disabled={busy}>
-              {busy ? (setup ? 'Creating account…' : 'Signing in…') : (setup ? 'Create account' : 'Sign in')}
+            <button className="btn btn-primary btn-block" type="submit" disabled={busy || (invite && !email)}>
+              {busy ? text.busy : text.submit}
             </button>
           </form>
-          <p className="auth-meta">{setup ? 'You can invite teammates later.' : 'Forgot your password? Ask your Snowprint admin to reset it.'}</p>
+          <p className="auth-meta">{invite ? <a href="#/">{text.meta}</a> : text.meta}</p>
         </div>
       </main>
     </div>

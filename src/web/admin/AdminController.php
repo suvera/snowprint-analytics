@@ -5,6 +5,7 @@ namespace dev\suvera\snowprint\web\admin;
 
 use dev\suvera\snowprint\query\RetentionService;
 use dev\suvera\snowprint\query\RollupBuilder;
+use dev\suvera\snowprint\query\RollupService;
 use dev\suvera\snowprint\site\ApiKeyService;
 use dev\suvera\snowprint\site\GoalService;
 use dev\suvera\snowprint\site\InvalidInput;
@@ -13,6 +14,7 @@ use dev\winterframework\stereotype\Autowired;
 use dev\winterframework\stereotype\RestController;
 use dev\winterframework\stereotype\web\DeleteMapping;
 use dev\winterframework\stereotype\web\GetMapping;
+use dev\winterframework\stereotype\web\PatchMapping;
 use dev\winterframework\stereotype\web\PathVariable;
 use dev\winterframework\stereotype\web\PostMapping;
 use dev\winterframework\web\http\HttpRequest;
@@ -39,6 +41,9 @@ class AdminController {
     #[Autowired]
     private RetentionService $retention;
 
+    #[Autowired]
+    private RollupService $rollupData;
+
     #[GetMapping(path: '/api/admin/sites')]
     public function listSites(): array {
         return ['sites' => $this->sites->all()];
@@ -50,6 +55,24 @@ class AdminController {
             $body = self::json($request);
             $site = $this->sites->create((string) ($body['domain'] ?? ''), (string) ($body['timezone'] ?? 'UTC'));
             return ResponseEntity::ok(['site' => $site]);
+        });
+    }
+
+    /** Body: {"timezone": "Europe/Berlin"} and/or {"retention_days": 90} */
+    #[PatchMapping(path: '/api/admin/sites/{domain}')]
+    public function updateSite(HttpRequest $request, #[PathVariable] string $domain): ResponseEntity {
+        return self::guard(function () use ($request, $domain) {
+            $body = self::json($request);
+            $site = $this->sites->findByDomain($domain) ?? throw new InvalidInput('unknown site: ' . $domain);
+            $retention = isset($body['retention_days']) ? filter_var($body['retention_days'], FILTER_VALIDATE_INT) : null;
+            if ($retention === false) {
+                throw new InvalidInput('retention_days must be a whole number');
+            }
+            $updated = $this->sites->update($site['id'], isset($body['timezone']) ? (string) $body['timezone'] : null, $retention);
+            if ($updated['timezone'] !== $site['timezone']) {
+                $this->rollupData->rebuildFromRawEvents($site['id'], $updated['timezone']);
+            }
+            return ResponseEntity::ok(['site' => $updated]);
         });
     }
 

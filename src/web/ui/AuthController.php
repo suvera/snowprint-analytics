@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace dev\suvera\snowprint\web\ui;
 
 use dev\suvera\snowprint\infra\PublicUrl;
+use dev\suvera\snowprint\site\InviteService;
 use dev\suvera\snowprint\site\UserService;
 use dev\winterframework\core\context\ApplicationContext;
 use dev\winterframework\stereotype\Autowired;
@@ -27,6 +28,9 @@ class AuthController {
 
     #[Autowired]
     private UiSessions $sessions;
+
+    #[Autowired]
+    private InviteService $invites;
 
     #[Autowired]
     private PublicUrl $publicUrl;
@@ -74,6 +78,36 @@ class AuthController {
             if ($user === null) {
                 throw new UiError(HttpStatus::$UNAUTHORIZED, 'wrong email or password');
             }
+            $session = $this->sessions->open($request);
+            $this->sessions->signIn($session, $user);
+            return $this->sessions->commit($session, ResponseEntity::ok()->withJson(['user' => $user->toArray()]));
+        });
+    }
+
+    /**
+     * Body: {"token": "..."}. The email an open invite is for. The token
+     * travels in bodies only, never in URLs, so request logs never hold it.
+     */
+    #[PostMapping(path: '/api/ui/invite')]
+    public function invite(HttpRequest $request): ResponseEntity {
+        return self::handle(function () use ($request) {
+            self::requireUiHeader($request);
+            $invite = $this->invites->find((string) (self::body($request)['token'] ?? ''));
+            if ($invite === null) {
+                throw new UiError(HttpStatus::$NOT_FOUND, 'this invite link is invalid, used or expired');
+            }
+            return ResponseEntity::ok()->withJson(['invite' => $invite]);
+        });
+    }
+
+    /** Body: {"token": "...", "name": "...", "password": "..."}; creates the account and signs in. */
+    #[PostMapping(path: '/api/ui/invite/accept')]
+    public function acceptInvite(HttpRequest $request): ResponseEntity {
+        return self::handle(function () use ($request) {
+            self::requireUiHeader($request);
+            $body = self::body($request);
+            $user = $this->invites->accept((string) ($body['token'] ?? ''), (string) ($body['name'] ?? ''),
+                (string) ($body['password'] ?? ''));
             $session = $this->sessions->open($request);
             $this->sessions->signIn($session, $user);
             return $this->sessions->commit($session, ResponseEntity::ok()->withJson(['user' => $user->toArray()]));
