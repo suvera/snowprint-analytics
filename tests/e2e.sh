@@ -75,8 +75,7 @@ python3 -m http.server "$GEO_PORT" --bind 0.0.0.0 --directory "$GEO_DIR" >/dev/n
 GEO_PID=$!
 
 echo "==> README step 3: build and run"
-docker build -q -f docker/Dockerfile --build-context winter-boot="${WINTER_BOOT_DIR:-../winter-boot}" \
-    -t "$IMAGE" . >/dev/null
+docker build -q -f docker/Dockerfile -t "$IMAGE" . >/dev/null
 docker run -d --name "$APP" -p "$PORT:7669" --env-file "$ENV_FILE" \
     --add-host=host.docker.internal:host-gateway "$IMAGE" >/dev/null
 

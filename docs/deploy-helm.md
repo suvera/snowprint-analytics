@@ -57,7 +57,6 @@ image:
 ```
 
 ```bash
-git clone https://github.com/suvera/winter-boot.git ../winter-boot   # during development
 docker/build.sh --push      # builds and pushes registry.example.com/snowprint:0.1.0-dev and :latest
 ```
 

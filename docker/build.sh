@@ -9,8 +9,6 @@
 #   SNOWPRINT_IMAGE overrides the image name (default: image.repository from
 #   deploy/values.local.yaml, else suvera/snowprint). Pushing the public
 #   suvera/snowprint refuses -dev versions and dirty trees; private registries don't.
-#   WINTER_BOOT_DIR is the winter-boot checkout used during development
-#   (default ../winter-boot, the path composer.json links).
 set -euo pipefail
 
 cd "$(dirname "$0")/.." # repo root = docker build context
@@ -54,7 +52,6 @@ fi
 REVISION="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
 echo "Building $IMAGE:$VERSION and $IMAGE:latest (commit $REVISION) ..."
 docker build . -f ./docker/Dockerfile \
-    --build-context winter-boot="${WINTER_BOOT_DIR:-../winter-boot}" \
     --label "org.opencontainers.image.version=$VERSION" \
     --label "org.opencontainers.image.revision=$REVISION" \
     --label "org.opencontainers.image.source=https://github.com/suvera/snowprint-analytics" \

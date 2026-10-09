@@ -153,9 +153,8 @@ curl localhost:7669/api/system/health            # {"status":"UP"}
   `winter_boot` extension is built from `vendor/suvera/winter-boot/php-ext`, so it always
   matches the Winter Boot release in `composer.lock`. These are Snowprint's own needs, not
   framework issues: add PHP extensions here, with a `Snowprint change:` note.
-- A `migrator` build stage compiles `winter-migrations-app.phar` from the exact Winter Boot
-  commit in `composer.lock` (by commit, not name: the repo has a branch and a tag both
-  called `2.1.0`).
+- A `migrator` build stage compiles `winter-migrations-app.phar` from the Winter Boot
+  package in `vendor/` (the version `composer.lock` pins).
 - The container runs as user **`app`** (never root, never `www-data`); `/app/var` is
   owned by `app`.
 - Health check: `wget http://127.0.0.1:7669/api/system/health`.
@@ -235,20 +234,17 @@ user agents, API keys, or MCP tool arguments containing free text.
 
 - Winter Boot source (exact version in use): `vendor/suvera/winter-boot/src`
 - Winter Boot docs: https://suvera.github.io/winter-boot
-- Winter Boot repositories: https://github.com/suvera/winter-boot (framework; cloned next to
-  this repository during development), https://github.com/suvera/winter-modules,
+- Winter Boot repositories: https://github.com/suvera/winter-boot (framework),
+  https://github.com/suvera/winter-modules,
   https://github.com/suvera/winter-doctrine
 
 ## Winter Boot Version
 
-**During development Winter Boot comes from the local checkout `../winter-boot`**
-(a winter-boot clone next to this repository), not Packagist: `composer.json` has a path repository, so
-`vendor/suvera/winter-boot` is a symlink and framework edits apply immediately. Image builds
-take the checkout as the `winter-boot` build context (`--build-context
-winter-boot=../winter-boot`, used by the README, `tests/e2e.sh`, `bench/run.sh`,
-`docker/build.sh`); the native extension and the migrator PHAR are built from it too.
-Switch back to the Packagist release (`suvera/winter-boot: ^<version>`, no path repository,
-no build context) before the first public release.
+Winter Boot comes from Packagist (`suvera/winter-boot: ^2.1.3`, exact version in
+`composer.lock`); the native extension and the migrator PHAR are built from that package.
+To try framework changes locally, add a temporary Composer path repository pointing at a
+winter-boot checkout and do not commit it. `minimum-stability` stays `dev` because Winter
+Boot 2.1.3 requires `suvera/monolog-cascade: dev-master`.
 
 Snowprint uses Winter Boot **2.1.3** (case-insensitive headers, coroutine-safe KV client,
 dotted routes, `$env` port typing, worker hooks `#[OnWorkerStart]` / `#[OnWorkerStop]`,

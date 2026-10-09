@@ -38,7 +38,7 @@ SNOWPRINT_DB_URL=pgsql:host=host.docker.internal;port=$PG_PORT;dbname=snowprint
 SNOWPRINT_DB_USER=snowprint
 SNOWPRINT_DB_PASSWORD=bench
 ENV
-docker build -q -f docker/Dockerfile --build-context winter-boot="${WINTER_BOOT_DIR:-../winter-boot}" \
+docker build -q -f docker/Dockerfile \
     -t "$IMAGE" . >/dev/null
 docker run -d --name "$APP" --cpus "$APP_CPUS" -p "$PORT:7669" --env-file "$ENV_FILE" \
     --add-host=host.docker.internal:host-gateway "$IMAGE" >/dev/null

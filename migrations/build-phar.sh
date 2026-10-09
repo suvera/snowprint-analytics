@@ -5,8 +5,8 @@
 # Default output: migrations/winter-migrations-app.phar (git-ignored).
 #
 # Framework source, first match wins:
-#   WINTER_BOOT_DIR  a local winter-boot checkout (default ../winter-boot next to
-#                    this repo, the same one composer.json links during development)
+#   WINTER_BOOT_DIR  a winter-boot source tree (default vendor/suvera/winter-boot,
+#                    the version composer.lock pins)
 #   WINTER_BOOT_REF  a winter-boot commit fetched from GitHub
 # Needs php, composer and (for WINTER_BOOT_REF) git; downloads Box if not installed.
 set -e
@@ -17,14 +17,14 @@ BOX_VERSION="${BOX_VERSION:-4.7.0}"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
-LOCAL="${WINTER_BOOT_DIR:-$SCRIPT_DIR/../../winter-boot}"
+LOCAL="${WINTER_BOOT_DIR:-$SCRIPT_DIR/../vendor/suvera/winter-boot}"
 if [ -z "${WINTER_BOOT_REF:-}" ] && [ -f "$LOCAL/composer.json" ]; then
     # Working tree as-is (uncommitted changes included), without build output.
     mkdir "$WORK/winter-boot"
     tar -C "$LOCAL" --exclude=./vendor --exclude=./target --exclude=./.git -cf - . | tar -C "$WORK/winter-boot" -xf -
     SOURCE="$(cd "$LOCAL" && pwd)"
 else
-    [ -n "${WINTER_BOOT_REF:-}" ] || { echo "no winter-boot checkout at $LOCAL; set WINTER_BOOT_DIR or WINTER_BOOT_REF" >&2; exit 1; }
+    [ -n "${WINTER_BOOT_REF:-}" ] || { echo "no winter-boot source at $LOCAL (run composer install); set WINTER_BOOT_DIR or WINTER_BOOT_REF" >&2; exit 1; }
     git init --quiet "$WORK/winter-boot"
     git -C "$WORK/winter-boot" fetch --quiet --depth 1 https://github.com/suvera/winter-boot.git "$WINTER_BOOT_REF"
     git -C "$WORK/winter-boot" checkout --quiet FETCH_HEAD

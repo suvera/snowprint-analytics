@@ -31,7 +31,7 @@ kind delete cluster --name "$CLUSTER" >/dev/null 2>&1 || true
 
 echo "==> kind cluster"
 kind create cluster --name "$CLUSTER" --wait 120s >/dev/null 2>&1 || fail "kind create cluster"
-docker build -q -f docker/Dockerfile --build-context winter-boot="${WINTER_BOOT_DIR:-../winter-boot}" -t "$IMAGE" . >/dev/null
+docker build -q -f docker/Dockerfile -t "$IMAGE" . >/dev/null
 kind load docker-image "$IMAGE" --name "$CLUSTER" >/dev/null
 
 echo "==> PostgreSQL + the guide's SQL"

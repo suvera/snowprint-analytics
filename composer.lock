@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "bcd50030c65551d0fc38bf108fd0210a",
+    "content-hash": "8c635bd52f0d86c42c90e00a843ade4f",
     "packages": [
         {
             "name": "brick/math",
@@ -2021,11 +2021,17 @@
         },
         {
             "name": "suvera/winter-boot",
-            "version": "2.1.0.x-dev",
-            "dist": {
-                "type": "path",
-                "url": "../winter-boot",
+            "version": "2.1.3",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/suvera/winter-boot.git",
                 "reference": "e4371536fc5cba476eee9345933c788327d6d0cb"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/suvera/winter-boot/zipball/e4371536fc5cba476eee9345933c788327d6d0cb",
+                "reference": "e4371536fc5cba476eee9345933c788327d6d0cb",
+                "shasum": ""
             },
             "require": {
                 "ext-pcntl": "*",
@@ -2054,6 +2060,7 @@
                     "dev\\winterframework\\": "src/"
                 }
             },
+            "notification-url": "https://packagist.org/downloads/",
             "license": [
                 "MIT"
             ],
@@ -2070,11 +2077,10 @@
                 "winterboot"
             ],
             "support": {
-                "issues": "https://github.com/suvera/winter-boot/issues"
+                "issues": "https://github.com/suvera/winter-boot/issues",
+                "source": "https://github.com/suvera/winter-boot/tree/2.1.3"
             },
-            "transport-options": {
-                "relative": true
-            }
+            "time": "2026-10-09T05:04:05+00:00"
         },
         {
             "name": "swoole/ide-helper",
@@ -5247,9 +5253,7 @@
     ],
     "aliases": [],
     "minimum-stability": "dev",
-    "stability-flags": {
-        "suvera/winter-boot": 20
-    },
+    "stability-flags": {},
     "prefer-stable": true,
     "prefer-lowest": false,
     "platform": {

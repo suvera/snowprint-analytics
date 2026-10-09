@@ -20,12 +20,6 @@
             "homepage": "https://github.com/suvera"
         }
     ],
-    "repositories": [
-        {
-            "type": "path",
-            "url": "../winter-boot"
-        }
-    ],
     "require": {
         "php": ">=8.5",
         "ext-pcntl": "*",
@@ -36,7 +30,7 @@
         "ext-swoole": "*",
         "matomo/device-detector": "^6.4",
         "maxmind-db/reader": "^1.12",
-        "suvera/winter-boot": "*@dev"
+        "suvera/winter-boot": "^2.1.3"
     },
     "require-dev": {
         "phpunit/phpunit": "^12.0"

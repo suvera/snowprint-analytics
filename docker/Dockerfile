@@ -2,11 +2,9 @@
 #####################################################################################
 #  Snowprint image, built from source:
 #
-#     docker build -f docker/Dockerfile --build-context winter-boot=../winter-boot \
-#         -t snowprint-analytics .
+#     docker build -f docker/Dockerfile -t snowprint-analytics .
 #
-#  During development Winter Boot comes from a local winter-boot checkout (the
-#  "winter-boot" build context; composer.json links ../winter-boot), not Packagist.
+#  Winter Boot is the Composer package (suvera/winter-boot from Packagist).
 #
 #  Stages "builder" and "runtime" are Winter Boot's base image
 #  (suvera/winter-boot, build/docker/Dockerfile @ 3bdb36d), copied as-is and then
@@ -14,13 +12,10 @@
 ######################################################################################
 # Snowprint change: Composer dependencies are installed first, so the native
 #   extension below is built from the same Winter Boot source as the app.
-#   Winter Boot is the local checkout passed as the "winter-boot" build context
-#   (composer.json: path repository ../winter-boot), copied instead of symlinked.
 FROM composer:2 AS vendor
-COPY --from=winter-boot --exclude=vendor --exclude=target --exclude=.git . /src/winter-boot
 WORKDIR /src/app
 COPY composer.json composer.lock ./
-RUN COMPOSER_MIRROR_PATH_REPOS=1 composer install --no-dev --no-scripts --no-interaction \
+RUN composer install --no-dev --no-scripts --no-interaction \
         --prefer-dist --ignore-platform-reqs --optimize-autoloader
 
 FROM php:8.5-cli-alpine AS builder
@@ -126,10 +121,10 @@ COPY ui/ ./
 RUN npm run build
 
 # Winter Boot's SQL migrator, compiled from the framework's own box.json, from
-# the same local checkout.
+# the same Composer package.
 FROM runtime AS migrator
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
-COPY --from=vendor /src/winter-boot /src/winter-boot
+COPY --from=vendor /src/app/vendor/suvera/winter-boot /src/winter-boot
 COPY migrations/build-phar.sh /tmp/build-phar.sh
 RUN WINTER_BOOT_DIR=/src/winter-boot sh /tmp/build-phar.sh /out/winter-migrations-app.phar
 

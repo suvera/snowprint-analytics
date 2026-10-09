@@ -159,12 +159,10 @@ Lookups happen in memory; only the country, region and city are stored, never th
 
 ### 3. Run
 
-During development Snowprint is built against a local checkout of
-[Winter Boot](https://github.com/suvera/winter-boot), cloned next to this repository:
+Build the image from this repository (Winter Boot comes from Packagist):
 
 ```bash
-git clone https://github.com/suvera/winter-boot.git ../winter-boot
-docker build -f docker/Dockerfile --build-context winter-boot=../winter-boot -t snowprint-analytics .
+docker build -f docker/Dockerfile -t snowprint-analytics .
 docker run -d --name snowprint --restart unless-stopped \
   -p 7669:7669 --env-file .env \
   --add-host=host.docker.internal:host-gateway \
