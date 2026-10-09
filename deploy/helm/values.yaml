@@ -42,6 +42,10 @@ database:
   existingSecretPasswordKey: password
   # ... or let the chart create one from this value (keep it out of git).
   password: ""
+  # Connections each Snowprint process may keep open. Every pod runs 7 processes,
+  # so it can hold up to 7 x maxConnections; keep the total over all pods (and the
+  # migration Job's 1) below the server's max_connections.
+  maxConnections: 4
 
 # Public base URL that tracked websites load /snow.js from and send events to,
 # e.g. https://stats.example.com. Shown in the dashboard's tracking snippet.

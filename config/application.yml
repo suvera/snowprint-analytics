@@ -40,7 +40,8 @@ winter:
       prettyPrint: $env.SNOWPRINT_JSON_PRETTY || false
   task:
     async:
-      poolSize: 4
+      # Snowprint does not use #[Async] (decision D8): one idle task process is enough.
+      poolSize: 1
       queueCapacity: 10000
       argsSize: 2048
     scheduling:
@@ -48,9 +49,11 @@ winter:
       queueCapacity: 100
   coroutine:
     db:
-      # Postgres connections per worker process; keep
-      # worker_num x maxConnections below Postgres max_connections (100).
-      maxConnections: 10
+      # PostgreSQL connections each process may keep open. A container runs
+      # 7 processes (4 HTTP workers, 1 async and 2 scheduler task workers), so it
+      # can hold up to 7 x maxConnections (28 by default). Keep the sum over all
+      # containers, plus the other users of the server, below max_connections.
+      maxConnections: $env.SNOWPRINT_DB_MAX_CONNECTIONS || 4
       maxWaitMs: 5000
   prometheus:
     # APCu: shared by every worker in the container, no network round-trips.

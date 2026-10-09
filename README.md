@@ -146,6 +146,7 @@ Edit `.env`:
 | `SNOWPRINT_DB_URL` | `pgsql:host=db.example.com;port=5432;dbname=snowprint` | Where PostgreSQL is (PDO DSN) |
 | `SNOWPRINT_DB_USER` | `snowprint` | The login from step 1 |
 | `SNOWPRINT_DB_PASSWORD` | `choose-a-strong-password` | Its password |
+| `SNOWPRINT_DB_MAX_CONNECTIONS` | `4` | Optional, default `4`. Connections each of the container's 7 processes may keep open, so the container uses at most 7 × this (28). Keep it below PostgreSQL's `max_connections` (default 100) together with everything else on that server |
 | `SNOWPRINT_TRUST_PROXY` | `true` | Optional, default `false`. Take the visitor IP from proxy headers, in order: `CF-Connecting-IP` (Cloudflare / cloudflared), `X-Forwarded-For` (leftmost), `X-Real-IP`, then the connection. Enable only behind a proxy that sets them (Cloudflare Tunnel, nginx, Caddy, Traefik, an ingress): otherwise visitors could forge them |
 | `SNOWPRINT_RESPECT_DNT` | `false` | Optional, default `true`. Ignore visits from browsers that send `DNT: 1` |
 | `SNOWPRINT_GEOIP_DOWNLOAD` | `dbip-city-lite` | Optional. Download DB-IP Lite at start-up for locations (see below) |

@@ -47,6 +47,8 @@ all: {{ .Values.single.replicas }}
     secretKeyRef:
       name: {{ include "snowprint.secretName" . }}
       key: {{ if .Values.database.existingSecret }}{{ .Values.database.existingSecretPasswordKey }}{{ else }}password{{ end }}
+- name: SNOWPRINT_DB_MAX_CONNECTIONS
+  value: {{ .Values.database.maxConnections | quote }}
 - name: SNOWPRINT_PUBLIC_URL
   value: {{ .Values.publicUrl | quote }}
 - name: SNOWPRINT_TRUST_PROXY

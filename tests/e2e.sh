@@ -335,6 +335,8 @@ console rollup:run | grep -q '"days_rolled_up":[1-9]' || fail "rollup:run rolled
 [ "$(psql_sp "select visitors from rollup_daily where site_id = 1 and dimension = 'page' and value = '/rolled'")" = 1 ] \
     || fail "the three-day-old pageview is not rolled up"
 console retention:run | grep -q '"events_deleted":0' || fail "retention:run deleted events inside the retention period"
+conns=$(psql_sp "select count(*) from pg_stat_activity where usename = 'snowprint'")
+[ "$conns" -le 28 ] || fail "Snowprint holds $conns PostgreSQL connections (cap: 7 processes x 4)"
 console demo:seed example.com | grep -q 'already has data' || fail "demo:seed must refuse a site with data"
 console site:add demo.test >/dev/null
 console demo:seed demo.test 35 | grep -Eq '"events": ?[0-9]{4,}' || fail "demo:seed"
