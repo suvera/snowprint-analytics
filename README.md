@@ -224,6 +224,14 @@ docker exec snowprint bin/console.sh site:set example.com retention 365
 docker exec snowprint bin/console.sh help
 ```
 
+On **Kubernetes** (Helm), run the same commands with `kubectl exec` on the Deployment, not
+`docker exec` on a pod name: `deploy/snowprint-all` in single mode, `deploy/snowprint-web`
+in split mode (add `-n <namespace>` if needed).
+
+```bash
+kubectl exec deploy/snowprint-all -- bin/console.sh site:add example.com Europe/Berlin
+```
+
 To look around before you have traffic, `bin/console.sh demo:seed demo.example` fills a
 new, empty site with 60 days of synthetic visits (it refuses sites that have data).
 
@@ -272,6 +280,9 @@ read-only and limited to the sites you list:
 
 ```bash
 docker exec snowprint bin/console.sh key:create claude example.com      # or: all
+
+# Kubernetes (split mode: deploy/snowprint-web)
+kubectl exec deploy/snowprint-all -- bin/console.sh key:create claude example.com
 ```
 
 ```json
@@ -302,10 +313,25 @@ Claude Desktop (`claude_desktop_config.json`), through the `mcp-remote` bridge:
 }
 ```
 
-**3. Ask.** For example:
+**3. Ask.** Plain questions work; Claude picks the tools. Some examples:
 
-> "Compare last week with the week before for example.com, tell me what caused the
-> drop on Wednesday, and draft a note for the team."
+- "How did example.com do this week compared with last week?"
+- "Traffic dropped on Wednesday. What caused it?"
+- "Which pages brought the most visitors this month, and where did they come from?"
+- "Which landing pages have the highest bounce rate over the last 30 days?"
+- "How many people are on the site right now, and on which pages?"
+- "Show daily pageviews for September and point out anything unusual."
+- "Which countries and devices grew the most since last month?"
+- "How is the newsletter signup goal converting, and which sources convert best?"
+- "Compare our utm_campaign results for October. Which campaigns should we stop?"
+- "How much traffic came from Google versus social media in the last 90 days?"
+- "Did the blog post we published on 2026-10-01 bring visitors? Break it down by referrer."
+- "How do German visitors behave differently from US visitors on /pricing?"
+- "Write a short weekly traffic report for the team, with three suggestions."
+
+With several sites, name the site or ask "Which sites can you see?" first. The built-in
+prompts are ready-made versions of the longer requests; in Claude Code they appear as slash
+commands, e.g. `/mcp__snowprint__weekly_report example.com`.
 
 | Tool | What it answers |
 |---|---|

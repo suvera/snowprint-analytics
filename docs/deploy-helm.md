@@ -125,7 +125,7 @@ curl http://localhost:7669/api/system/health                     # {"status":"UP
 
 Open `https://stats.example.com/ui/` (or `http://localhost:7669/ui/` through the
 port-forward). The first visitor creates the admin account. Add sites in the dashboard, or
-with the operator console:
+with the operator console (in split mode use `deploy/snowprint-web`):
 
 ```bash
 kubectl -n snowprint exec deploy/snowprint-all -- bin/console.sh site:add example.com
