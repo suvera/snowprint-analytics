@@ -4,12 +4,11 @@ declare(strict_types=1);
 namespace dev\suvera\snowprint\web\ui;
 
 use dev\suvera\snowprint\infra\SessionStoreConfig;
-use dev\suvera\snowprint\ingest\Tracker;
 use dev\suvera\snowprint\site\User;
 use dev\suvera\snowprint\site\UserService;
-use dev\winterframework\core\context\ApplicationContext;
 use dev\winterframework\stereotype\Autowired;
 use dev\winterframework\stereotype\Component;
+use dev\winterframework\stereotype\Value;
 use dev\winterframework\web\http\HttpRequest;
 use dev\winterframework\web\http\ResponseEntity;
 use dev\winterframework\web\session\RequestSession;
@@ -38,8 +37,9 @@ class UiSessions {
     #[Autowired]
     private UserService $users;
 
-    #[Autowired]
-    private ApplicationContext $ctx;
+    /** Mark the cookies Secure (SNOWPRINT_SECURE_COOKIES=true behind HTTPS). */
+    #[Value('${snowprint.ui.secureCookies}', false)]
+    private bool $secureCookies = false;
 
     private ?SessionOptions $options = null;
     private ?SessionOptions $shareOptions = null;
@@ -104,7 +104,7 @@ class UiSessions {
         return $this->options ??= new SessionOptions(
             name: self::COOKIE,
             expirySecs: SessionStoreConfig::TTL_SECONDS,
-            secure: Tracker::truthy($this->ctx->getPropertyStr('snowprint.ui.secureCookies', 'false')),
+            secure: $this->secureCookies,
             httponly: true,
             samesite: 'Lax',
         );

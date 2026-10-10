@@ -25,16 +25,12 @@ class PartitionMaintenanceJob {
 
     #[Scheduled(fixedDelay: 3600, initialDelay: 30)]
     public function ensurePartitions(): void {
-        try {
-            $created = (int) $this->db->queryForScalar(
-                'SELECT snowprint_ensure_event_partitions(?)',
-                [self::MONTHS_AHEAD]
-            );
-            if ($created > 0) {
-                self::logInfo("Created $created events partition(s)");
-            }
-        } catch (\Throwable $e) {
-            self::logException($e, 'Events partition maintenance failed. ');
+        $created = (int) $this->db->queryForScalar(
+            'SELECT snowprint_ensure_event_partitions(?)',
+            [self::MONTHS_AHEAD]
+        );
+        if ($created > 0) {
+            self::logInfo("Created $created events partition(s)");
         }
     }
 }

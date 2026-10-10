@@ -14,8 +14,6 @@ server:
   swoole:
     reactor_num: 2
     worker_num: 4
-    task_enable_coroutine: true
-    task_use_object: true
     backlog: 1024       # ingest bursts: larger accept queue than the usual 128
     dispatch_mode: 1
     hook_flags: SWOOLE_HOOK_ALL   # coroutine-friendly PDO, so one worker serves many requests
@@ -30,7 +28,7 @@ winter:
   application:
     name: snowprint
     id: snowprint
-    version: 0.1.0
+    version: 0.2.0
   web:
     request:
       # Log "TRACE START/FINISH <method> <uri> -> <status> (<ms> ms)" for every request.
@@ -39,19 +37,16 @@ winter:
       # Indent JSON responses (handy when reading the API with curl).
       prettyPrint: $env.SNOWPRINT_JSON_PRETTY || false
   task:
-    async:
-      # Snowprint does not use #[Async] (decision D8): one idle task process is enough.
-      poolSize: 1
-      queueCapacity: 10000
-      argsSize: 2048
+    # No #[EnableAsync] (decision D8), so there is no async task process.
     scheduling:
       poolSize: 2
       queueCapacity: 100
   coroutine:
     db:
-      # PostgreSQL connections each process may keep open. A container runs
-      # 7 processes (4 HTTP workers, 1 async and 2 scheduler task workers), so it
-      # can hold up to 7 x maxConnections (28 by default). Keep the sum over all
+      # PostgreSQL connections each process may keep open. The all and worker
+      # roles run 6 processes that use the database (4 HTTP workers, 2 scheduler
+      # workers), so a container holds up to 6 x maxConnections (24 by default);
+      # web and ingest run only the 4 HTTP workers (16). Keep the sum over all
       # containers, plus the other users of the server, below max_connections.
       maxConnections: $env.SNOWPRINT_DB_MAX_CONNECTIONS || 4
       maxWaitMs: 5000

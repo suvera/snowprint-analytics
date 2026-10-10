@@ -6,6 +6,7 @@ namespace dev\suvera\snowprint\site;
 use dev\winterframework\pdbc\PdbcTemplate;
 use dev\winterframework\stereotype\Autowired;
 use dev\winterframework\stereotype\Service;
+use dev\winterframework\txn\stereotype\Transactional;
 
 /**
  * Invite links (SP-019). An admin invites an email address with an admin flag
@@ -78,7 +79,11 @@ class InviteService {
         return $row === null ? null : ['email' => (string) $row['email']];
     }
 
-    /** Creates the invited user; the invite is used up even if two requests race. */
+    /**
+     * Creates the invited user; the invite is used up even if two requests
+     * race. One transaction: if creating the user fails, the claim is undone.
+     */
+    #[Transactional]
     public function accept(string $token, string $name, string $password): User {
         $row = $this->open($token) ?? throw new InvalidInput('this invite link is invalid, used or expired');
         UserService::checkPassword($password);
@@ -92,13 +97,8 @@ class InviteService {
         foreach (json_decode((string) $row['site_roles'], true) ?: [] as $siteId => $role) {
             $roles[(int) $siteId] = (string) $role;
         }
-        try {
-            return $this->users->createInvited((string) $row['email'], $name, $password,
-                $row['is_admin'] === true || $row['is_admin'] === 't', $roles);
-        } catch (\Throwable $e) {
-            $this->db->update('UPDATE invites SET accepted_at = NULL WHERE id = ?', [(int) $row['id']]);
-            throw $e;
-        }
+        return $this->users->createInvited((string) $row['email'], $name, $password,
+            $row['is_admin'] === true || $row['is_admin'] === 't', $roles);
     }
 
     private function open(string $token): ?array {

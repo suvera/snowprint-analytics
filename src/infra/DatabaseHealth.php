@@ -8,13 +8,11 @@ use dev\winterframework\actuator\HealthIndicator;
 use dev\winterframework\actuator\stereotype\HealthInformer;
 use dev\winterframework\pdbc\PdbcTemplate;
 use dev\winterframework\stereotype\Autowired;
-use dev\winterframework\stereotype\Component;
 
 /**
  * /api/system/health is DOWN when PostgreSQL does not answer (SP-031). Error details are
  * not exposed: the health endpoint is public.
  */
-#[Component]
 #[HealthInformer]
 class DatabaseHealth implements HealthIndicator {
 

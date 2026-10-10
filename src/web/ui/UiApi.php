@@ -5,23 +5,14 @@ namespace dev\suvera\snowprint\web\ui;
 
 use dev\suvera\snowprint\site\InvalidInput;
 use dev\winterframework\web\http\HttpRequest;
-use dev\winterframework\web\http\HttpStatus;
-use dev\winterframework\web\http\ResponseEntity;
 
 /**
- * Helpers shared by the dashboard API controllers.
- *
- * CSRF: state-changing requests must carry "X-Snowprint: 1". Browsers cannot
- * add a custom header cross-site without a CORS preflight, which this API
- * never grants; the session cookie is also SameSite=Lax.
+ * Helpers shared by the JSON API controllers (dashboard and operator console).
+ * Errors need no wrapper: InvalidInput and UiError are HttpRestExceptions,
+ * which Winter Boot answers with their status and message. The CSRF header
+ * check is UiHeaderInterceptor's job.
  */
 trait UiApi {
-
-    private static function requireUiHeader(HttpRequest $request): void {
-        if ($request->getFirstHeader('X-Snowprint') !== '1') {
-            throw new UiError(HttpStatus::$FORBIDDEN, 'missing X-Snowprint header');
-        }
-    }
 
     /** @return array<string, mixed> */
     private static function body(HttpRequest $request): array {
@@ -30,16 +21,5 @@ trait UiApi {
             throw new InvalidInput('request body must be a JSON object');
         }
         return $body;
-    }
-
-    /** @param \Closure(): ResponseEntity $action */
-    private static function handle(\Closure $action): ResponseEntity {
-        try {
-            return $action();
-        } catch (UiError $e) {
-            return ResponseEntity::status($e->status)->withJson(['error' => $e->getMessage()]);
-        } catch (InvalidInput $e) {
-            return ResponseEntity::badRequest()->withJson(['error' => $e->getMessage()]);
-        }
     }
 }

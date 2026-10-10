@@ -1,7 +1,7 @@
 {
   "name": "snowprint-ui",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Snowprint dashboard: React + TypeScript SPA on the Winter Boot JSON API",
   "license": "MIT",
   "type": "module",

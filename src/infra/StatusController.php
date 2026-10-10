@@ -9,9 +9,9 @@ use dev\winterframework\stereotype\RestController;
 use dev\winterframework\stereotype\web\GetMapping;
 
 /**
- * /api/status: name and version. Served by every role (infra is scanned by all
- * starters), so it doubles as the Kubernetes liveness probe: it never touches
- * PostgreSQL.
+ * /api/status: name and version (also on /api/system/info, see AppInfo).
+ * Served by every role (infra is scanned by all starters), so it doubles as
+ * the Kubernetes liveness probe: it never touches PostgreSQL.
  */
 #[RestController]
 class StatusController {

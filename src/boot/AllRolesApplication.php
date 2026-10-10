@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace dev\suvera\snowprint\boot;
 
 use dev\winterframework\stereotype\task\EnableScheduling;
+use dev\winterframework\stereotype\cache\EnableCaching;
 use dev\winterframework\stereotype\txn\EnableTransactionManagement;
 use dev\winterframework\stereotype\WinterBootApplication;
 
@@ -17,6 +18,7 @@ use dev\winterframework\stereotype\WinterBootApplication;
     ],
 )]
 #[EnableTransactionManagement]
+#[EnableCaching]
 #[EnableScheduling]
 class AllRolesApplication extends BaseApplication {
 }

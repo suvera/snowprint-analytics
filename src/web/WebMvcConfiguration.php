@@ -5,30 +5,25 @@ namespace dev\suvera\snowprint\web;
 
 use dev\suvera\snowprint\infra\OperatorToken;
 use dev\suvera\snowprint\web\admin\OperatorInterceptor;
-use dev\winterframework\core\context\ApplicationContext;
+use dev\suvera\snowprint\web\ui\UiHeaderInterceptor;
 use dev\winterframework\core\web\config\InterceptorRegistry;
 use dev\winterframework\core\web\config\WebMvcConfigurer;
 use dev\winterframework\stereotype\Autowired;
 use dev\winterframework\stereotype\Configuration;
 
-/**
- * Registers request interceptors (beans are looked up on
- * first request, not here, so nothing touches the database before fork).
- */
+/** Registers request interceptors. */
 #[Configuration(name: 'webMvcConfigurer')]
 class WebMvcConfiguration implements WebMvcConfigurer {
 
-    /** Interceptor regex (the registry wraps it in "/.../"). */
+    /** Interceptor regexes (the registry wraps them in "/.../"). */
     public const ADMIN_PATHS = '^\/api\/admin(\/|$)';
+    public const UI_PATHS = '^\/api\/(ui|share)(\/|$)';
 
     #[Autowired]
-    private ApplicationContext $ctx;
+    private OperatorToken $operatorToken;
 
     public function addInterceptors(InterceptorRegistry $registry): void {
-        $ctx = $this->ctx;
-        $registry->addInterceptor(
-            new OperatorInterceptor(static fn(): OperatorToken => $ctx->beanByClass(OperatorToken::class)),
-            self::ADMIN_PATHS
-        );
+        $registry->addInterceptor(new OperatorInterceptor($this->operatorToken), self::ADMIN_PATHS);
+        $registry->addInterceptor(new UiHeaderInterceptor(), self::UI_PATHS);
     }
 }

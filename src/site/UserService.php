@@ -3,9 +3,11 @@ declare(strict_types=1);
 
 namespace dev\suvera\snowprint\site;
 
+use dev\suvera\snowprint\infra\RateLimiter;
 use dev\winterframework\pdbc\PdbcTemplate;
 use dev\winterframework\stereotype\Autowired;
 use dev\winterframework\stereotype\Service;
+use dev\winterframework\txn\stereotype\Transactional;
 
 /**
  * Dashboard accounts (PRD §6.3): first-run admin, invited users, password
@@ -22,8 +24,8 @@ class UserService {
     #[Autowired]
     private PdbcTemplate $db;
 
-    /** @var array<string, array{0: int, 1: int}> email => [failures, first failure time] (per worker) */
-    private array $failures = [];
+    #[Autowired]
+    private RateLimiter $limiter;
 
     private ?string $dummyHash = null;
 
@@ -50,18 +52,18 @@ class UserService {
     /** Returns the user on success; null for a wrong email or password (never says which). */
     public function authenticate(string $email, string $password): ?User {
         $key = strtolower(trim($email));
-        [$count, $since] = $this->failures[$key] ?? [0, 0];
-        if ($count >= self::MAX_FAILURES && time() - $since < self::LOCK_SECONDS) {
+        $bucket = 'login:' . hash('sha256', $key); // never the address itself
+        if ($this->limiter->hits($bucket, self::LOCK_SECONDS) >= self::MAX_FAILURES) {
             throw new InvalidInput('too many failed sign-ins; try again in 15 minutes');
         }
         $row = $this->db->queryForList('SELECT id, password_hash FROM users WHERE email = ?', [$key])[0] ?? null;
         // Verify against a dummy hash for unknown emails, so timing does not reveal accounts.
         $hash = $row['password_hash'] ?? ($this->dummyHash ??= password_hash(random_bytes(16), PASSWORD_ARGON2ID));
         if (!password_verify($password, (string) $hash) || $row === null) {
-            $this->failures[$key] = [$count + 1, $count === 0 ? time() : $since];
+            $this->limiter->hit($bucket, self::LOCK_SECONDS);
             return null;
         }
-        unset($this->failures[$key]);
+        $this->limiter->clear($bucket);
         $this->db->update('UPDATE users SET last_login_at = now() WHERE id = ?', [$row['id']]);
         return $this->find((int) $row['id']);
     }
@@ -103,6 +105,7 @@ class UserService {
      * The last admin cannot lose admin rights.
      * @param array<int, string> $siteRoles site id => role
      */
+    #[Transactional]
     public function updateAccess(int $userId, bool $isAdmin, array $siteRoles): User {
         $user = $this->find($userId) ?? throw new InvalidInput('unknown user');
         self::checkRoles($siteRoles);

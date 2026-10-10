@@ -3,9 +3,13 @@ declare(strict_types=1);
 
 namespace dev\suvera\snowprint\site;
 
+use dev\suvera\snowprint\infra\CacheConfig;
+use dev\winterframework\cache\stereotype\CacheEvict;
+use dev\winterframework\cache\stereotype\Cacheable;
 use dev\winterframework\pdbc\PdbcTemplate;
 use dev\winterframework\stereotype\Autowired;
 use dev\winterframework\stereotype\Service;
+use dev\winterframework\txn\stereotype\Transactional;
 
 /**
  * API keys for MCP and the server-side API (PRD §6.3). The full key is shown
@@ -20,9 +24,6 @@ class ApiKeyService {
     #[Autowired]
     private PdbcTemplate $db;
 
-    /** @var array<string, array{0: ?ApiKey, 1: int}> digest => [key, cached at] */
-    private array $cache = [];
-
     public static function digest(string $key): string {
         return hash('sha256', $key);
     }
@@ -31,6 +32,7 @@ class ApiKeyService {
      * @param list<int>|null $siteIds null = all sites
      * @return array{id: int, key: string}
      */
+    #[Transactional]
     public function create(string $name, ?array $siteIds, bool $canWrite): array {
         $name = trim($name);
         if ($name === '' || mb_strlen($name) > 255) {
@@ -73,8 +75,8 @@ class ApiKeyService {
         ], $rows);
     }
 
+    #[CacheEvict(cacheNames: CacheConfig::API_KEYS, allEntries: true)]
     public function revoke(int $id): bool {
-        $this->cache = [];
         return $this->db->update('UPDATE api_keys SET revoked_at = now() WHERE id = ? AND revoked_at IS NULL', [$id]) > 0;
     }
 
@@ -83,11 +85,15 @@ class ApiKeyService {
         if (!str_starts_with($key, self::KEY_PREFIX)) {
             return null;
         }
-        $digest = self::digest($key);
-        $cached = $this->cache[$digest] ?? null;
-        if ($cached !== null && time() - $cached[1] < 30) {
-            return $cached[0];
-        }
+        return $this->findByDigest(self::digest($key));
+    }
+
+    /**
+     * The active key with this digest. Cached by digest, so the raw key is
+     * never a cache key; public because #[Cacheable] only advises public methods.
+     */
+    #[Cacheable(cacheNames: CacheConfig::API_KEYS)]
+    public function findByDigest(string $digest): ?ApiKey {
         $row = $this->db->queryForList(
             'SELECT id, name, all_sites, can_write FROM api_keys WHERE key_hash = ? AND revoked_at IS NULL',
             [$digest]
@@ -101,10 +107,6 @@ class ApiKeyService {
             $apiKey = new ApiKey((int) $row['id'], (string) $row['name'], $siteIds, self::bool($row['can_write']));
             $this->db->update('UPDATE api_keys SET last_used_at = now() WHERE id = ?', [$row['id']]);
         }
-        if (count($this->cache) > 1000) {
-            $this->cache = [];
-        }
-        $this->cache[$digest] = [$apiKey, time()];
         return $apiKey;
     }
 

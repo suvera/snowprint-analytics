@@ -6,6 +6,7 @@ namespace dev\suvera\snowprint\site;
 use dev\winterframework\pdbc\PdbcTemplate;
 use dev\winterframework\stereotype\Autowired;
 use dev\winterframework\stereotype\Service;
+use dev\winterframework\txn\stereotype\Transactional;
 
 #[Service]
 class SiteService {
@@ -132,6 +133,7 @@ class SiteService {
      * API key grants, share links. Events that ingest still accepts in the next seconds
      * (it caches the site list) are removed by the retention job.
      */
+    #[Transactional]
     public function delete(int $siteId): void {
         $this->db->update('INSERT INTO deleted_sites (site_id) VALUES (?) ON CONFLICT (site_id) DO NOTHING', [$siteId]);
         $this->db->update('DELETE FROM events WHERE site_id = ?', [$siteId]);

@@ -6,6 +6,29 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+- Version 0.2.0.
+- Sign-in lockout, share-link password attempts and the MCP rate limit are counted in
+  PostgreSQL (new table `rate_limits`, migration 010), so the limits hold across workers
+  and pods instead of per worker.
+- Multi-step writes (daily rollups with their watermark, site deletion, API key creation,
+  user access changes, accepting an invite, rollup rebuilds) run in one transaction with
+  Winter Boot's `#[Transactional]`.
+- The API key cache uses Winter Boot's `#[Cacheable]`; settings are injected with `#[Value]`.
+- `/api/system/info` reports the name and version.
+- Winter Boot 2.1.6. Rollups and the retention sweep take a PostgreSQL lock (`#[Lockable]`
+  with `PdoLockManager`, table `winter_locks`, migration 011), so with several worker pods
+  only one runs them at a time; the operator console answers 409 while one is running.
+- API errors use Winter Boot's error responses: `{"timestamp", "status", "message",
+  "error"}` (the `error` text is unchanged), and client errors log one INFO line.
+- Bad `limit` values on `/api/ui/stats/breakdown` answer 400 instead of being read as 0.
+
+### Fixed
+- Expired dashboard and share-link sessions are deleted hourly; `winter_sessions` grew
+  forever.
+- Connection-count guidance: a container runs 6 database-using processes (24 connections
+  at the default), not 7 (28); web and ingest pods run 4.
+
 ### Removed
 - The tag-triggered GitHub Actions image release. Images are pushed with
   `docker/build.sh --push` (docs/releasing.md).

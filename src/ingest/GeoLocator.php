@@ -3,9 +3,8 @@ declare(strict_types=1);
 
 namespace dev\suvera\snowprint\ingest;
 
-use dev\winterframework\core\context\ApplicationContext;
-use dev\winterframework\stereotype\Autowired;
 use dev\winterframework\stereotype\Component;
+use dev\winterframework\stereotype\Value;
 use dev\winterframework\util\log\Wlf4p;
 use MaxMind\Db\Reader;
 
@@ -18,8 +17,8 @@ use MaxMind\Db\Reader;
 class GeoLocator {
     use Wlf4p;
 
-    #[Autowired]
-    private ApplicationContext $ctx;
+    #[Value('${snowprint.geoip.database}', '')]
+    private string $database;
 
     private ?Reader $reader = null;
     private bool $opened = false;
@@ -56,7 +55,7 @@ class GeoLocator {
     private function reader(): ?Reader {
         if (!$this->opened) {
             $this->opened = true;
-            $path = trim($this->ctx->getPropertyStr('snowprint.geoip.database', ''));
+            $path = trim($this->database);
             if ($path !== '') {
                 try {
                     $this->reader = new Reader($path);

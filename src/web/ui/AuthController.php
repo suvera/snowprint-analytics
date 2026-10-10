@@ -6,9 +6,9 @@ namespace dev\suvera\snowprint\web\ui;
 use dev\suvera\snowprint\infra\PublicUrl;
 use dev\suvera\snowprint\site\InviteService;
 use dev\suvera\snowprint\site\UserService;
-use dev\winterframework\core\context\ApplicationContext;
 use dev\winterframework\stereotype\Autowired;
 use dev\winterframework\stereotype\RestController;
+use dev\winterframework\stereotype\Value;
 use dev\winterframework\stereotype\web\GetMapping;
 use dev\winterframework\stereotype\web\PostMapping;
 use dev\winterframework\web\http\HttpRequest;
@@ -35,8 +35,11 @@ class AuthController {
     #[Autowired]
     private PublicUrl $publicUrl;
 
-    #[Autowired]
-    private ApplicationContext $ctx;
+    #[Value('${snowprint.geoip.attribution}', '')]
+    private string $geoAttribution;
+
+    #[Value('${snowprint.geoip.attributionUrl}', '')]
+    private string $geoAttributionUrl;
 
     #[GetMapping(path: '/api/ui/session')]
     public function session(HttpRequest $request): ResponseEntity {
@@ -48,8 +51,8 @@ class AuthController {
             'public_url' => $this->publicUrl->get(),
             // GeoIP data credit to show next to locations ('' when none needed).
             'geo_attribution' => [
-                'text' => trim($this->ctx->getPropertyStr('snowprint.geoip.attribution', '')),
-                'url' => trim($this->ctx->getPropertyStr('snowprint.geoip.attributionUrl', '')),
+                'text' => trim($this->geoAttribution),
+                'url' => trim($this->geoAttributionUrl),
             ],
         ]);
     }
@@ -57,31 +60,25 @@ class AuthController {
     /** Body: {"email": "...", "name": "...", "password": "..."}; only while no user exists. */
     #[PostMapping(path: '/api/ui/setup')]
     public function setup(HttpRequest $request): ResponseEntity {
-        return self::handle(function () use ($request) {
-            self::requireUiHeader($request);
-            $body = self::body($request);
-            $user = $this->users->createFirstAdmin((string) ($body['email'] ?? ''), (string) ($body['name'] ?? ''),
-                (string) ($body['password'] ?? ''));
-            $session = $this->sessions->open($request);
-            $this->sessions->signIn($session, $user);
-            return $this->sessions->commit($session, ResponseEntity::ok()->withJson(['user' => $user->toArray()]));
-        });
+        $body = self::body($request);
+        $user = $this->users->createFirstAdmin((string) ($body['email'] ?? ''), (string) ($body['name'] ?? ''),
+            (string) ($body['password'] ?? ''));
+        $session = $this->sessions->open($request);
+        $this->sessions->signIn($session, $user);
+        return $this->sessions->commit($session, ResponseEntity::ok()->withJson(['user' => $user->toArray()]));
     }
 
     /** Body: {"email": "...", "password": "..."} */
     #[PostMapping(path: '/api/ui/login')]
     public function login(HttpRequest $request): ResponseEntity {
-        return self::handle(function () use ($request) {
-            self::requireUiHeader($request);
-            $body = self::body($request);
-            $user = $this->users->authenticate((string) ($body['email'] ?? ''), (string) ($body['password'] ?? ''));
-            if ($user === null) {
-                throw new UiError(HttpStatus::$UNAUTHORIZED, 'wrong email or password');
-            }
-            $session = $this->sessions->open($request);
-            $this->sessions->signIn($session, $user);
-            return $this->sessions->commit($session, ResponseEntity::ok()->withJson(['user' => $user->toArray()]));
-        });
+        $body = self::body($request);
+        $user = $this->users->authenticate((string) ($body['email'] ?? ''), (string) ($body['password'] ?? ''));
+        if ($user === null) {
+            throw new UiError(HttpStatus::$UNAUTHORIZED, 'wrong email or password');
+        }
+        $session = $this->sessions->open($request);
+        $this->sessions->signIn($session, $user);
+        return $this->sessions->commit($session, ResponseEntity::ok()->withJson(['user' => $user->toArray()]));
     }
 
     /**
@@ -90,37 +87,28 @@ class AuthController {
      */
     #[PostMapping(path: '/api/ui/invite')]
     public function invite(HttpRequest $request): ResponseEntity {
-        return self::handle(function () use ($request) {
-            self::requireUiHeader($request);
-            $invite = $this->invites->find((string) (self::body($request)['token'] ?? ''));
-            if ($invite === null) {
-                throw new UiError(HttpStatus::$NOT_FOUND, 'this invite link is invalid, used or expired');
-            }
-            return ResponseEntity::ok()->withJson(['invite' => $invite]);
-        });
+        $invite = $this->invites->find((string) (self::body($request)['token'] ?? ''));
+        if ($invite === null) {
+            throw new UiError(HttpStatus::$NOT_FOUND, 'this invite link is invalid, used or expired');
+        }
+        return ResponseEntity::ok()->withJson(['invite' => $invite]);
     }
 
     /** Body: {"token": "...", "name": "...", "password": "..."}; creates the account and signs in. */
     #[PostMapping(path: '/api/ui/invite/accept')]
     public function acceptInvite(HttpRequest $request): ResponseEntity {
-        return self::handle(function () use ($request) {
-            self::requireUiHeader($request);
-            $body = self::body($request);
-            $user = $this->invites->accept((string) ($body['token'] ?? ''), (string) ($body['name'] ?? ''),
-                (string) ($body['password'] ?? ''));
-            $session = $this->sessions->open($request);
-            $this->sessions->signIn($session, $user);
-            return $this->sessions->commit($session, ResponseEntity::ok()->withJson(['user' => $user->toArray()]));
-        });
+        $body = self::body($request);
+        $user = $this->invites->accept((string) ($body['token'] ?? ''), (string) ($body['name'] ?? ''),
+            (string) ($body['password'] ?? ''));
+        $session = $this->sessions->open($request);
+        $this->sessions->signIn($session, $user);
+        return $this->sessions->commit($session, ResponseEntity::ok()->withJson(['user' => $user->toArray()]));
     }
 
     #[PostMapping(path: '/api/ui/logout')]
     public function logout(HttpRequest $request): ResponseEntity {
-        return self::handle(function () use ($request) {
-            self::requireUiHeader($request);
-            $session = $this->sessions->open($request);
-            $this->sessions->signOut($session);
-            return $this->sessions->commit($session, ResponseEntity::ok()->withJson(['signed_out' => true]));
-        });
+        $session = $this->sessions->open($request);
+        $this->sessions->signOut($session);
+        return $this->sessions->commit($session, ResponseEntity::ok()->withJson(['signed_out' => true]));
     }
 }

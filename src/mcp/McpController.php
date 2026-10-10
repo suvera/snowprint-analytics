@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace dev\suvera\snowprint\mcp;
 
+use dev\suvera\snowprint\infra\RateLimiter;
 use dev\suvera\snowprint\site\ApiKey;
 use dev\suvera\snowprint\site\ApiKeyService;
 use dev\winterframework\enums\RequestMethod;
@@ -11,6 +12,7 @@ use dev\winterframework\stereotype\RestController;
 use dev\winterframework\stereotype\web\PostMapping;
 use dev\winterframework\stereotype\web\RequestMapping;
 use dev\winterframework\web\http\HttpRequest;
+use dev\winterframework\web\http\HttpStatus;
 use dev\winterframework\web\http\ResponseEntity;
 
 /**
@@ -32,8 +34,8 @@ class McpController {
     #[Autowired]
     private ApiKeyService $keys;
 
-    /** @var array<int, array{0: int, 1: int}> key id => [minute, calls] (per worker) */
-    private array $calls = [];
+    #[Autowired]
+    private RateLimiter $limiter;
 
     #[PostMapping(path: '/api/mcp')]
     public function post(HttpRequest $request): ResponseEntity {
@@ -45,7 +47,7 @@ class McpController {
                     'missing or invalid API key: send "Authorization: Bearer <key>"'));
         }
         if (!$this->allow($key)) {
-            return ResponseEntity::status(\dev\winterframework\web\http\HttpStatus::$TOO_MANY_REQUESTS)
+            return ResponseEntity::status(HttpStatus::$TOO_MANY_REQUESTS)
                 ->withHeader('Retry-After', '60')
                 ->withJson(McpServer::error(null, McpServer::INVALID_REQUEST, 'rate limit exceeded'));
         }
@@ -76,7 +78,7 @@ class McpController {
 
     #[RequestMapping(path: '/api/mcp', method: [RequestMethod::GET, RequestMethod::DELETE])]
     public function noStream(): ResponseEntity {
-        return ResponseEntity::status(\dev\winterframework\web\http\HttpStatus::$METHOD_NOT_ALLOWED)
+        return ResponseEntity::status(HttpStatus::$METHOD_NOT_ALLOWED)
             ->withHeader('Allow', 'POST');
     }
 
@@ -88,14 +90,8 @@ class McpController {
         return $this->keys->authenticate($m[1]);
     }
 
-    /** Fixed one-minute window per key and worker. */
+    /** One-minute window per key, shared by all workers and pods. */
     private function allow(ApiKey $key): bool {
-        $minute = intdiv(time(), 60);
-        [$window, $count] = $this->calls[$key->id] ?? [$minute, 0];
-        if ($window !== $minute) {
-            [$window, $count] = [$minute, 0];
-        }
-        $this->calls[$key->id] = [$window, ++$count];
-        return $count <= self::RATE_LIMIT_PER_MINUTE;
+        return $this->limiter->hit('mcp:' . $key->id, 60) <= self::RATE_LIMIT_PER_MINUTE;
     }
 }

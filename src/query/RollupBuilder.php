@@ -3,9 +3,12 @@ declare(strict_types=1);
 
 namespace dev\suvera\snowprint\query;
 
+use dev\suvera\snowprint\infra\LockConfig;
 use dev\winterframework\pdbc\PdbcTemplate;
 use dev\winterframework\stereotype\Autowired;
+use dev\winterframework\stereotype\concurrent\Lockable;
 use dev\winterframework\stereotype\Service;
+use dev\winterframework\txn\stereotype\Transactional;
 
 /**
  * Writes daily rollups (decision D13): for each site, every complete
@@ -30,7 +33,12 @@ class RollupBuilder {
     #[Autowired]
     private StatsQuery $stats;
 
-    /** @return int days rolled up, over all sites */
+    /**
+     * One run at a time across all pods (the scheduled job and the operator
+     * console); a busy lock throws LockException at once.
+     * @return int days rolled up, over all sites
+     */
+    #[Lockable(name: 'snowprint-rollup', ttlSeconds: 1800, lockManager: LockConfig::PG)]
     public function rollPending(?\DateTimeImmutable $now = null, int $maxDays = self::MAX_DAYS_PER_RUN): int {
         $rolled = 0;
         foreach ($this->db->queryForList('SELECT id, timezone FROM sites ORDER BY id') as $site) {
@@ -59,14 +67,18 @@ class RollupBuilder {
                 break;
             }
             $this->rollDay($siteId, $day, $next);
-            $this->saveWatermark($job, $next);
             $day = $next;
         }
         return $rolled;
     }
 
-    /** Replaces the rollup rows of the local day [$from, $to). */
-    private function rollDay(int $siteId, \DateTimeImmutable $from, \DateTimeImmutable $to): void {
+    /**
+     * Replaces the rollup rows of the local day [$from, $to) and moves the
+     * watermark to $to, in one transaction: reports never see the day half
+     * written. Public because #[Transactional] only advises public methods.
+     */
+    #[Transactional]
+    public function rollDay(int $siteId, \DateTimeImmutable $from, \DateTimeImmutable $to): void {
         $date = $from->format('Y-m-d');
         $this->db->update('DELETE FROM rollup_daily WHERE site_id = ? AND day = ?', [$siteId, $date]);
         $none = Filters::none();
@@ -75,6 +87,7 @@ class RollupBuilder {
             $rows[] = ['', '', $sums];
         }
         if ($rows === []) {
+            $this->saveWatermark(RollupService::watermarkJob($siteId), $to);
             return;
         }
         foreach (Dimensions::breakdownNames() as $dimension) {
@@ -95,6 +108,7 @@ class RollupBuilder {
                     visits = EXCLUDED.visits, pageviews = EXCLUDED.pageviews, events = EXCLUDED.events,
                     bounces = EXCLUDED.bounces, duration_sum = EXCLUDED.duration_sum', $binds);
         }
+        $this->saveWatermark(RollupService::watermarkJob($siteId), $to);
     }
 
     /**

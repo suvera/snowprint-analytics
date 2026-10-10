@@ -7,6 +7,7 @@ use dev\suvera\snowprint\query\RollupBuilder;
 use dev\winterframework\stereotype\Autowired;
 use dev\winterframework\stereotype\Component;
 use dev\winterframework\task\scheduling\stereotype\Scheduled;
+use dev\winterframework\util\concurrent\LockException;
 use dev\winterframework\util\log\Wlf4p;
 
 /**
@@ -24,11 +25,11 @@ class RollupJob {
     public function rollup(): void {
         try {
             $days = $this->builder->rollPending();
-            if ($days > 0) {
-                self::logInfo("Rolled up $days site-day(s)");
-            }
-        } catch (\Throwable $e) {
-            self::logException($e, 'Rollup failed. ');
+        } catch (LockException) {
+            return; // another pod is rolling up right now
+        }
+        if ($days > 0) {
+            self::logInfo("Rolled up $days site-day(s)");
         }
     }
 }

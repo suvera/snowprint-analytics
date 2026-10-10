@@ -8,12 +8,12 @@ use dev\suvera\snowprint\query\Period;
 use dev\suvera\snowprint\query\RollupBuilder;
 use dev\suvera\snowprint\query\RollupService;
 use dev\suvera\snowprint\query\StatsQuery;
-use dev\suvera\snowprint\site\DemoSeeder;
 use dev\suvera\snowprint\site\GoalService;
 use dev\suvera\snowprint\site\InvalidInput;
 use dev\suvera\snowprint\site\SiteService;
 use dev\suvera\snowprint\tests\support\Beans;
 use dev\suvera\snowprint\tests\support\PdoPdbcTemplate;
+use dev\suvera\snowprint\web\admin\DemoSeeder;
 use PHPUnit\Framework\TestCase;
 
 /** Demo data tells the PRD §7.5 story and is rolled up. Runs via tests/integration.sh. */

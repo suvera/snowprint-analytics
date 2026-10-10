@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace dev\suvera\snowprint\site;
 
+use dev\suvera\snowprint\infra\RateLimiter;
 use dev\winterframework\pdbc\PdbcTemplate;
 use dev\winterframework\stereotype\Autowired;
 use dev\winterframework\stereotype\Service;
@@ -23,8 +24,8 @@ class ShareLinkService {
     #[Autowired]
     private PdbcTemplate $db;
 
-    /** @var array<int, array{0: int, 1: int}> link id => [failures, window start], per worker */
-    private array $failures = [];
+    #[Autowired]
+    private RateLimiter $limiter;
 
     /** The dashboard path of a share token (append it to the public URL). */
     public static function path(string $token): string {
@@ -94,24 +95,19 @@ class ShareLinkService {
 
     /**
      * Checks a link's password. After MAX_FAILURES wrong passwords within
-     * FAILURE_WINDOW_SECONDS this worker refuses every attempt until the
-     * window ends.
+     * FAILURE_WINDOW_SECONDS every attempt is refused until the window ends
+     * (counted in PostgreSQL, so across all workers and pods).
      */
     public function checkPassword(array $link, string $password, ?int $now = null): bool {
-        $now ??= time();
-        $id = $link['id'];
-        [$count, $since] = $this->failures[$id] ?? [0, $now];
-        if ($now - $since >= self::FAILURE_WINDOW_SECONDS) {
-            [$count, $since] = [0, $now];
-        }
-        if ($count >= self::MAX_FAILURES) {
+        $bucket = 'share:' . $link['id'];
+        if ($this->limiter->hits($bucket, self::FAILURE_WINDOW_SECONDS, $now) >= self::MAX_FAILURES) {
             throw new InvalidInput('too many wrong passwords; try again later');
         }
         if ($link['password_hash'] === null || password_verify($password, $link['password_hash'])) {
-            unset($this->failures[$id]);
+            $this->limiter->clear($bucket);
             return true;
         }
-        $this->failures[$id] = [$count + 1, $since];
+        $this->limiter->hit($bucket, self::FAILURE_WINDOW_SECONDS, $now);
         return false;
     }
 }

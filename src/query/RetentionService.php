@@ -3,8 +3,10 @@ declare(strict_types=1);
 
 namespace dev\suvera\snowprint\query;
 
+use dev\suvera\snowprint\infra\LockConfig;
 use dev\winterframework\pdbc\PdbcTemplate;
 use dev\winterframework\stereotype\Autowired;
+use dev\winterframework\stereotype\concurrent\Lockable;
 use dev\winterframework\stereotype\Service;
 use dev\winterframework\util\log\Wlf4p;
 
@@ -25,7 +27,11 @@ class RetentionService {
     #[Autowired]
     private RollupService $rollups;
 
-    /** @return array{events_deleted: int, partitions_dropped: list<string>} */
+    /**
+     * One sweep at a time across all pods; a busy lock throws LockException at once.
+     * @return array{events_deleted: int, partitions_dropped: list<string>}
+     */
+    #[Lockable(name: 'snowprint-retention', ttlSeconds: 3600, lockManager: LockConfig::PG)]
     public function apply(?\DateTimeImmutable $now = null): array {
         $now ??= new \DateTimeImmutable('now');
         $cutoffs = [];

@@ -21,13 +21,9 @@ class SaltExpiryJob {
 
     #[Scheduled(fixedDelay: 900, initialDelay: 60)]
     public function purge(): void {
-        try {
-            $removed = $this->salts->purgeExpired();
-            if ($removed > 0) {
-                self::logInfo("Discarded $removed expired salt(s)");
-            }
-        } catch (\Throwable $e) {
-            self::logException($e, 'Salt expiry failed. ');
+        $removed = $this->salts->purgeExpired();
+        if ($removed > 0) {
+            self::logInfo("Discarded $removed expired salt(s)");
         }
     }
 }

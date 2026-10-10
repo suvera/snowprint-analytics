@@ -3,9 +3,8 @@ declare(strict_types=1);
 
 namespace dev\suvera\snowprint\infra\mail;
 
-use dev\winterframework\core\context\ApplicationContext;
-use dev\winterframework\stereotype\Autowired;
 use dev\winterframework\stereotype\Component;
+use dev\winterframework\stereotype\Value;
 
 /**
  * Outgoing email over the operator's SMTP server (snowprint.mail.*). Optional:
@@ -15,14 +14,29 @@ use dev\winterframework\stereotype\Component;
 #[Component]
 class Mailer {
 
-    #[Autowired]
-    private ApplicationContext $ctx;
+    #[Value('${snowprint.mail.host}', '')]
+    private string $host = '';
+
+    #[Value('${snowprint.mail.port}', 587)]
+    private int $port = 587;
+
+    #[Value('${snowprint.mail.encryption}', 'starttls')]
+    private string $encryption = 'starttls';
+
+    #[Value('${snowprint.mail.username}', '')]
+    private string $username = '';
+
+    #[Value('${snowprint.mail.password}', '')]
+    private string $password = '';
+
+    #[Value('${snowprint.mail.from}', '')]
+    private string $sender = '';
 
     private ?MailTransport $transport = null;
     private ?string $from = null;
 
     public function enabled(): bool {
-        return trim($this->ctx->getPropertyStr('snowprint.mail.host', '')) !== '';
+        return trim($this->host) !== '';
     }
 
     /** Replaces the SMTP transport (tests). */
@@ -45,14 +59,13 @@ class Mailer {
                 throw new MailException('email is not configured (SNOWPRINT_SMTP_HOST)');
             }
             // No sender configured: the SMTP login, which is usually an address.
-            $from = trim($this->ctx->getPropertyStr('snowprint.mail.from', ''));
-            $this->from = self::from($from !== '' ? $from : $this->ctx->getPropertyStr('snowprint.mail.username', ''));
+            $this->from = self::from(trim($this->sender) !== '' ? $this->sender : $this->username);
             $this->transport = new SmtpTransport(
-                trim($this->ctx->getPropertyStr('snowprint.mail.host', '')),
-                (int) $this->ctx->getPropertyStr('snowprint.mail.port', '587'),
-                strtolower(trim($this->ctx->getPropertyStr('snowprint.mail.encryption', 'starttls'))),
-                $this->ctx->getPropertyStr('snowprint.mail.username', ''),
-                $this->ctx->getPropertyStr('snowprint.mail.password', ''),
+                trim($this->host),
+                $this->port,
+                strtolower(trim($this->encryption)),
+                $this->username,
+                $this->password,
             );
         }
         $this->transport->send($this->from, $to, $subject, $textBody, $htmlBody);

@@ -50,32 +50,24 @@ class UsersController {
 
     #[GetMapping(path: '/api/ui/users')]
     public function list(HttpRequest $request): ResponseEntity {
-        return self::handle(function () use ($request) {
-            $this->admin($request);
-            return ResponseEntity::ok()->withJson(['users' => $this->users->all(), 'invites' => $this->invites->pending(),
-                'mail_enabled' => $this->mailer->enabled()]);
-        });
+        $this->admin($request);
+        return ResponseEntity::ok()->withJson(['users' => $this->users->all(), 'invites' => $this->invites->pending(),
+            'mail_enabled' => $this->mailer->enabled()]);
     }
 
     /** Body: {"is_admin": false, "sites": {"example.com": "viewer"}} */
     #[PutMapping(path: '/api/ui/users/{id}')]
     public function update(HttpRequest $request, #[PathVariable] int $id): ResponseEntity {
-        return self::handle(function () use ($request, $id) {
-            self::requireUiHeader($request);
-            $this->admin($request);
-            $body = self::body($request);
-            $user = $this->users->updateAccess($id, ($body['is_admin'] ?? false) === true, $this->siteRoles($body['sites'] ?? []));
-            return ResponseEntity::ok()->withJson(['user' => $user->toArray()]);
-        });
+        $this->admin($request);
+        $body = self::body($request);
+        $user = $this->users->updateAccess($id, ($body['is_admin'] ?? false) === true, $this->siteRoles($body['sites'] ?? []));
+        return ResponseEntity::ok()->withJson(['user' => $user->toArray()]);
     }
 
     #[DeleteMapping(path: '/api/ui/users/{id}')]
     public function delete(HttpRequest $request, #[PathVariable] int $id): ResponseEntity {
-        return self::handle(function () use ($request, $id) {
-            self::requireUiHeader($request);
-            $this->users->delete($this->admin($request), $id);
-            return ResponseEntity::ok()->withJson(['deleted' => $id]);
-        });
+        $this->users->delete($this->admin($request), $id);
+        return ResponseEntity::ok()->withJson(['deleted' => $id]);
     }
 
     /**
@@ -86,46 +78,40 @@ class UsersController {
      */
     #[PostMapping(path: '/api/ui/invites')]
     public function invite(HttpRequest $request): ResponseEntity {
-        return self::handle(function () use ($request) {
-            self::requireUiHeader($request);
-            $actor = $this->admin($request);
-            $body = self::body($request);
-            $dashboard = '';
-            if ($this->mailer->enabled()) {
-                try {
-                    $dashboard = PublicUrl::normalize((string) ($body['dashboard_url'] ?? ''));
-                } catch (\InvalidArgumentException) {
-                    throw new InvalidInput('"dashboard_url" must be the http(s) address of the dashboard');
-                }
+        $actor = $this->admin($request);
+        $body = self::body($request);
+        $dashboard = '';
+        if ($this->mailer->enabled()) {
+            try {
+                $dashboard = PublicUrl::normalize((string) ($body['dashboard_url'] ?? ''));
+            } catch (\InvalidArgumentException) {
+                throw new InvalidInput('"dashboard_url" must be the http(s) address of the dashboard');
             }
-            $invite = $this->invites->create($actor, (string) ($body['email'] ?? ''), ($body['is_admin'] ?? false) === true,
-                $this->siteRoles($body['sites'] ?? []));
-            $result = ['invite' => $invite, 'emailed' => false];
-            if ($dashboard !== '') {
-                $mail = new InviteEmail($actor->name !== '' ? $actor->name : $actor->email,
-                    $dashboard . '/ui/#/invite/' . $invite['token']);
-                try {
-                    $this->mailer->send($invite['email'], InviteEmail::SUBJECT, $mail->text(), $mail->html());
-                    $result['emailed'] = true;
-                } catch (MailException $e) {
-                    self::logWarning('Invite ' . $invite['id'] . ' created but not emailed: ' . $e->getMessage());
-                    $result['email_error'] = $e->getMessage();
-                }
+        }
+        $invite = $this->invites->create($actor, (string) ($body['email'] ?? ''), ($body['is_admin'] ?? false) === true,
+            $this->siteRoles($body['sites'] ?? []));
+        $result = ['invite' => $invite, 'emailed' => false];
+        if ($dashboard !== '') {
+            $mail = new InviteEmail($actor->name !== '' ? $actor->name : $actor->email,
+                $dashboard . '/ui/#/invite/' . $invite['token']);
+            try {
+                $this->mailer->send($invite['email'], InviteEmail::SUBJECT, $mail->text(), $mail->html());
+                $result['emailed'] = true;
+            } catch (MailException $e) {
+                self::logWarning('Invite ' . $invite['id'] . ' created but not emailed: ' . $e->getMessage());
+                $result['email_error'] = $e->getMessage();
             }
-            return ResponseEntity::ok()->withJson($result);
-        });
+        }
+        return ResponseEntity::ok()->withJson($result);
     }
 
     #[DeleteMapping(path: '/api/ui/invites/{id}')]
     public function revokeInvite(HttpRequest $request, #[PathVariable] int $id): ResponseEntity {
-        return self::handle(function () use ($request, $id) {
-            self::requireUiHeader($request);
-            $this->admin($request);
-            if (!$this->invites->revoke($id)) {
-                throw new UiError(HttpStatus::$NOT_FOUND, 'no open invite with id ' . $id);
-            }
-            return ResponseEntity::ok()->withJson(['revoked' => $id]);
-        });
+        $this->admin($request);
+        if (!$this->invites->revoke($id)) {
+            throw new UiError(HttpStatus::$NOT_FOUND, 'no open invite with id ' . $id);
+        }
+        return ResponseEntity::ok()->withJson(['revoked' => $id]);
     }
 
     private function admin(HttpRequest $request): User {

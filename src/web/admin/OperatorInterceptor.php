@@ -19,13 +19,12 @@ class OperatorInterceptor implements HandlerInterceptor {
     public const TOKEN_HEADER = 'X-Operator-Token';
     private const LOOPBACK = ['127.0.0.1', '::1'];
 
-    /** @param \Closure(): OperatorToken $token resolved lazily, after workers fork */
-    public function __construct(private readonly \Closure $token) {
+    public function __construct(private readonly OperatorToken $token) {
     }
 
     public function preHandle(HttpRequest $request, ResponseEntity $response): bool {
         $local = in_array($request->getRemoteAddr(), self::LOOPBACK, true);
-        if ($local && ($this->token)()->matches($request->getFirstHeader(self::TOKEN_HEADER))) {
+        if ($local && $this->token->matches($request->getFirstHeader(self::TOKEN_HEADER))) {
             return true;
         }
         $response->withStatus(HttpStatus::$FORBIDDEN)

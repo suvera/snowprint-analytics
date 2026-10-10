@@ -184,14 +184,21 @@ curl localhost:7669/api/system/health            # {"status":"UP"}
   implements (`VisitorHasherImpl implements VisitorHasher`). Otherwise provide a `#[Bean]`
   method returning the interface. Multiple `*Impl` beans for one interface → use names
   (`#[Autowired('name')]`).
-- `#[Value('${a.b}')]` injects config values; `ApplicationContext` is autowirable.
+- `#[Value('${a.b}', default)]` injects config values, converted to the property type
+  (2.1.6+: `"false"`/`"no"`/`"off"`/`"0"` are `false` for a `bool`); prefer it to
+  `ApplicationContext::getProperty*()` reads. `ApplicationContext` is autowirable.
 - App-level annotations on the starter: `#[EnableTransactionManagement]`, `#[EnableAsync]`,
   `#[EnableScheduling]` (from `dev\winterframework\stereotype\txn` / `...\task`).
 - **Swoole safety:** never read `$_SERVER`, `$_COOKIE`, `$_GET`, `$_POST` or use `session_*`
   (shared worker process). Read everything from the injected `HttpRequest`; use
   `SessionManager` for dashboard logins. Never call blocking `sleep()`; use `\Co::sleep()`.
-- `#[Scheduled]` jobs that must run once cluster-wide need `#[Lockable]` (local lock in the
-  single container, Redis `LockManager` when scaled).
+- `#[Scheduled]` work that must run once cluster-wide gets `#[Lockable(..., ttlSeconds: ...,
+  lockManager: LockConfig::PG)]` (Winter Boot's `PdoLockManager`, table `winter_locks`).
+  Put it on the service method that does the work, not on the `#[Scheduled]` method, and
+  catch `LockException` in the job (busy = another pod runs it; skip quietly), otherwise
+  the scheduler logs it as an error.
+- Multi-statement writes go in a `#[Transactional]` public service method (the native AOP
+  extension also advises `$this->method()` calls).
 - `PdbcTemplate::queryForScalar()` throws when no row is found (like Spring's
   `queryForObject`); for optional rows use `queryForList(...)[0] ?? null`.
 - Unserializing anything (e.g. Matomo blob archives) must use
@@ -205,6 +212,11 @@ curl localhost:7669/api/system/health            # {"status":"UP"}
   `#[RequestBody]`; `HttpRequest` can be a handler parameter.
 - Return `array` → JSON, `string` → text, `ResponseEntity` for status/headers
   (`ResponseEntity::ok()->withJson($x)`).
+- Errors: throw `site\InvalidInput` (400) or `web\ui\UiError` (any status). Both are
+  `HttpRestException`s, which Winter Boot answers as `{"status", "message", "error": <text>}`
+  (the SPA reads `error`) and logs as one INFO line. No try/catch wrappers in handlers.
+- The dashboard's CSRF header check (`X-Snowprint: 1` on non-GET `/api/ui`, `/api/share`)
+  is `web/ui/UiHeaderInterceptor`; handlers don't repeat it.
 - Interceptors: `HandlerInterceptor` registered in a
   `#[Configuration(name: 'webMvcConfigurer')]` class implementing `WebMvcConfigurer`.
 
@@ -240,14 +252,15 @@ user agents, API keys, or MCP tool arguments containing free text.
 
 ## Winter Boot Version
 
-Winter Boot comes from Packagist (`suvera/winter-boot: ^2.1.4`, exact version in
+Winter Boot comes from Packagist (`suvera/winter-boot: ^2.1.6`, exact version in
 `composer.lock`); the native extension and the migrator PHAR are built from that package.
 To try framework changes locally, add a temporary Composer path repository pointing at a
 winter-boot checkout and do not commit it. `minimum-stability` stays `dev` because Winter
-Boot 2.1.4 requires `suvera/monolog-cascade: dev-master`.
+Boot requires `suvera/monolog-cascade: dev-master`.
 
-Snowprint uses Winter Boot **2.1.4** (case-insensitive headers, coroutine-safe KV client,
+Snowprint uses Winter Boot **2.1.6** (case-insensitive headers, coroutine-safe KV client,
 dotted routes, `$env` port typing, worker hooks `#[OnWorkerStart]` / `#[OnWorkerStop]`,
-`/api/system/health` answers 503 when DOWN, metrics recorded before the first scrape, compact JSON
-and closed pool connections that really disconnect; Snowprint caps the pool at 4). Report new framework issues in
+`/api/system/health` answers 503 when DOWN, metrics recorded before the first scrape, compact JSON,
+closed pool connections that really disconnect, typed `#[Value]`, 4xx logged at INFO and
+`PdoLockManager` for distributed `#[Lockable]`; Snowprint caps the pool at 4). Report new framework issues in
 `TASKS.md` under "Winter Boot upstream list".

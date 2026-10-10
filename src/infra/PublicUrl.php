@@ -3,9 +3,9 @@ declare(strict_types=1);
 
 namespace dev\suvera\snowprint\infra;
 
-use dev\winterframework\core\context\ApplicationContext;
-use dev\winterframework\stereotype\Autowired;
 use dev\winterframework\stereotype\Component;
+use dev\winterframework\stereotype\PostConstruct;
+use dev\winterframework\stereotype\Value;
 
 /**
  * The public tracking URL (snowprint.publicUrl / SNOWPRINT_PUBLIC_URL): where
@@ -15,14 +15,17 @@ use dev\winterframework\stereotype\Component;
 #[Component]
 class PublicUrl {
 
-    #[Autowired]
-    private ApplicationContext $ctx;
+    #[Value('${snowprint.publicUrl}', '')]
+    private string $url;
 
-    private ?string $url = null;
+    #[PostConstruct]
+    public function init(): void {
+        $this->url = self::normalize($this->url);
+    }
 
     /** Normalised base URL without a trailing slash, or '' when not configured. */
     public function get(): string {
-        return $this->url ??= self::normalize($this->ctx->getPropertyStr('snowprint.publicUrl', ''));
+        return $this->url;
     }
 
     public static function normalize(string $value): string {

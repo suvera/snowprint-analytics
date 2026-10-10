@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace dev\suvera\snowprint\tests\integration;
 
+use dev\suvera\snowprint\infra\RateLimiter;
 use dev\suvera\snowprint\site\InvalidInput;
 use dev\suvera\snowprint\site\InviteService;
 use dev\suvera\snowprint\site\ShareLinkService;
@@ -19,6 +20,7 @@ final class AccountsTest extends TestCase {
     private UserService $users;
     private InviteService $invites;
     private SiteService $sites;
+    private RateLimiter $limiter;
 
     public static function setUpBeforeClass(): void {
         self::$db = PdoPdbcTemplate::fromEnv();
@@ -28,8 +30,10 @@ final class AccountsTest extends TestCase {
         if (self::$db === null) {
             self::markTestSkipped('set SNOWPRINT_TEST_DB_URL (tests/integration.sh does)');
         }
-        self::$db->pdo->exec("DELETE FROM invites; DELETE FROM users; DELETE FROM sites WHERE domain LIKE '%.accounts.test'");
-        $this->users = Beans::inject(new UserService(), 'db', self::$db);
+        self::$db->pdo->exec("DELETE FROM invites; DELETE FROM users; DELETE FROM rate_limits;"
+            . " DELETE FROM sites WHERE domain LIKE '%.accounts.test'");
+        $this->limiter = Beans::inject(new RateLimiter(), 'db', self::$db);
+        $this->users = Beans::inject(Beans::inject(new UserService(), 'db', self::$db), 'limiter', $this->limiter);
         $this->invites = Beans::inject(Beans::inject(new InviteService(), 'db', self::$db), 'users', $this->users);
         $this->sites = Beans::inject(new SiteService(), 'db', self::$db);
     }
@@ -93,7 +97,7 @@ final class AccountsTest extends TestCase {
 
     public function testShareLinks(): void {
         $id = $this->sites->create('shared.accounts.test')['id'];
-        $shares = Beans::inject(new ShareLinkService(), 'db', self::$db);
+        $shares = Beans::inject(Beans::inject(new ShareLinkService(), 'db', self::$db), 'limiter', $this->limiter);
         $open = $shares->create($id, null, ' Public ', null);
         $locked = $shares->create($id, null, 'Team', 'share password 1');
         self::assertMatchesRegularExpression('/^[0-9a-f]{32}$/', $open['token']);
@@ -124,7 +128,7 @@ final class AccountsTest extends TestCase {
 
     public function testShareLinkPasswordAttemptsAreLimited(): void {
         $id = $this->sites->create('guess.accounts.test')['id'];
-        $shares = Beans::inject(new ShareLinkService(), 'db', self::$db);
+        $shares = Beans::inject(Beans::inject(new ShareLinkService(), 'db', self::$db), 'limiter', $this->limiter);
         $link = $shares->resolve($shares->create($id, null, '', 'share password 1')['token']);
         for ($i = 0; $i < ShareLinkService::MAX_FAILURES; $i++) {
             self::assertFalse($shares->checkPassword($link, 'guess ' . $i, 1000));
@@ -135,6 +139,35 @@ final class AccountsTest extends TestCase {
         } catch (InvalidInput) {
         }
         self::assertTrue($shares->checkPassword($link, 'share password 1', 1000 + ShareLinkService::FAILURE_WINDOW_SECONDS));
+    }
+
+    public function testSignInLocksAfterRepeatedFailuresAcrossWorkers(): void {
+        $this->users->createFirstAdmin('lock@accounts.test', 'Admin', 'admin password 1');
+        for ($i = 0; $i < UserService::MAX_FAILURES; $i++) {
+            self::assertNull($this->users->authenticate('lock@accounts.test', 'guess ' . $i));
+        }
+        // A second worker (a fresh bean on the same database) sees the same lock.
+        $other = Beans::inject(Beans::inject(new UserService(), 'db', self::$db), 'limiter', $this->limiter);
+        try {
+            $other->authenticate('LOCK@accounts.test', 'admin password 1');
+            self::fail('the right password was accepted while locked');
+        } catch (InvalidInput) {
+        }
+        $buckets = self::$db->pdo->query('SELECT bucket FROM rate_limits')->fetchAll(\PDO::FETCH_COLUMN);
+        self::assertSame(['login:' . hash('sha256', 'lock@accounts.test')], $buckets, 'never the address itself');
+    }
+
+    public function testRateLimiterWindows(): void {
+        self::assertSame(1, $this->limiter->hit('t', 60, 1000));
+        self::assertSame(2, $this->limiter->hit('t', 60, 1059));
+        self::assertSame(2, $this->limiter->hits('t', 60, 1059));
+        self::assertSame(0, $this->limiter->hits('t', 60, 1060), 'window over');
+        self::assertSame(1, $this->limiter->hit('t', 60, 1060), 'a new window starts');
+        self::assertSame(0, $this->limiter->purge(1060 + RateLimiter::KEEP_SECONDS));
+        self::assertSame(1, $this->limiter->purge(1061 + RateLimiter::KEEP_SECONDS));
+        $this->limiter->hit('t', 60);
+        $this->limiter->clear('t');
+        self::assertSame(0, $this->limiter->hits('t', 60));
     }
 
     public function testRetentionBounds(): void {

@@ -51,9 +51,11 @@ bolted on: each part of Snowprint maps to a Winter Boot feature.
 |---|---|
 | Tracking, dashboard and MCP endpoints | `#[RestController]`, `#[GetMapping]`, `#[PostMapping]`, … |
 | Batched event writes | Swoole worker start/stop hooks for a per-worker buffer, `PdbcTemplate` multi-row inserts |
-| Sessions, daily rollups, retention, salt rotation | `#[Scheduled]` jobs, safe on several workers (idempotent or advisory locks) |
+| Sessions, daily rollups, retention, salt rotation | `#[Scheduled]` jobs; `#[Lockable]` with a PostgreSQL lock manager so rollups and retention run on one pod at a time |
+| Atomic multi-step writes | `#[Transactional]` service methods |
+| API key lookups, settings | `#[Cacheable]` / `#[CacheEvict]`, `#[Value]` |
 | Dashboard sign-in | Coroutine-safe `SessionManager` with `PdbcSessionStore` |
-| Operator API, request guards | `HandlerInterceptor` in a `WebMvcConfigurer` |
+| Operator API, CSRF guard, error responses | `HandlerInterceptor` in a `WebMvcConfigurer`, `HttpRestException` |
 | Zero-touch upgrades | Built-in SQL migrator |
 | Health checks and metrics | Actuator (`#[HealthInformer]`), Prometheus registry |
 | One image, three roles | One `#[WinterBootApplication]` starter per role, shared beans |
@@ -141,7 +143,7 @@ Edit `.env`:
 | `SNOWPRINT_DB_URL`<br>Where PostgreSQL is (PDO DSN) | `pgsql:host=db.example.com;port=5432;dbname=snowprint` |
 | `SNOWPRINT_DB_USER`<br>The login from step 1 | `snowprint` |
 | `SNOWPRINT_DB_PASSWORD`<br>Its password | `choose-a-strong-password` |
-| `SNOWPRINT_DB_MAX_CONNECTIONS`<br>Optional, default `4`. Connections each of the container's 7 processes may keep open, so the container uses at most 7 × this (28). Keep it below PostgreSQL's `max_connections` (default 100) together with everything else on that server | `4` |
+| `SNOWPRINT_DB_MAX_CONNECTIONS`<br>Optional, default `4`. Connections each of the container's 6 database-using processes (4 HTTP workers, 2 scheduler workers) may keep open, so the container uses at most 6 × this (24). Keep it below PostgreSQL's `max_connections` (default 100) together with everything else on that server | `4` |
 | `SNOWPRINT_TRUST_PROXY`<br>Optional, default `false`. Take the visitor IP from proxy headers, in order: `CF-Connecting-IP` (Cloudflare / cloudflared), `X-Forwarded-For` (leftmost), `X-Real-IP`, then the connection. Enable only behind a proxy that sets them (Cloudflare Tunnel, nginx, Caddy, Traefik, an ingress): otherwise visitors could forge them | `true` |
 | `SNOWPRINT_RESPECT_DNT`<br>Optional, default `true`. Ignore visits from browsers that send `DNT: 1` | `false` |
 | `SNOWPRINT_GEOIP_DOWNLOAD`<br>Optional. Download DB-IP Lite at start-up for locations (see below) | `dbip-city-lite` |

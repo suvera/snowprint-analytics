@@ -4,10 +4,10 @@ declare(strict_types=1);
 namespace dev\suvera\snowprint\ingest;
 
 use dev\suvera\snowprint\infra\Metrics;
-use dev\winterframework\core\context\ApplicationContext;
 use dev\winterframework\enums\RequestMethod;
 use dev\winterframework\stereotype\Autowired;
 use dev\winterframework\stereotype\RestController;
+use dev\winterframework\stereotype\Value;
 use dev\winterframework\stereotype\web\PostMapping;
 use dev\winterframework\stereotype\web\RequestMapping;
 use dev\winterframework\util\log\Wlf4p;
@@ -29,13 +29,13 @@ class EventController {
     private Tracker $tracker;
 
     #[Autowired]
-    private ApplicationContext $ctx;
-
-    #[Autowired]
     private Metrics $metrics;
 
-    private ?bool $trustProxy = null;
-    private ?bool $logClientIp = null;
+    #[Value('${snowprint.ingest.trustProxy}', false)]
+    private bool $trustProxy = false;
+
+    #[Value('${snowprint.ingest.logClientIp}', false)]
+    private bool $logClientIp = false;
 
     #[PostMapping(path: '/api/event')]
     public function track(HttpRequest $request): ResponseEntity {
@@ -45,11 +45,8 @@ class EventController {
             $this->metrics->ingest('invalid');
             return self::cors(ResponseEntity::badRequest()->withJson(['error' => $e->getMessage()]));
         }
-        $this->trustProxy ??= Tracker::truthy($this->ctx->getPropertyStr('snowprint.ingest.trustProxy', 'false'));
-
         $client = ClientInfo::from($request, $this->trustProxy);
         $this->metrics->clientIp($client->ipSource, $client->privateIp);
-        $this->logClientIp ??= Tracker::truthy($this->ctx->getPropertyStr('snowprint.ingest.logClientIp', 'false'));
         if ($this->logClientIp) {
             // Opt-in debugging (SNOWPRINT_LOG_CLIENT_IP): the only place a raw IP is logged.
             self::logInfo('Client IP debug', [

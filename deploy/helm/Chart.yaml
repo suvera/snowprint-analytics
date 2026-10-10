@@ -2,8 +2,8 @@ apiVersion: v2
 name: snowprint
 description: Snowprint, self-hosted privacy-first web analytics with a built-in MCP server, built on Winter Boot
 type: application
-version: 0.1.0
-appVersion: "0.1.0"
+version: 0.2.0
+appVersion: "0.2.0"
 home: https://github.com/suvera/snowprint-analytics
 sources:
   - https://github.com/suvera/snowprint-analytics

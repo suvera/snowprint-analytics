@@ -75,14 +75,18 @@ set) and from recognised bots are not tracked.
 
 - Users: email, name, an Argon2id password hash, admin flag and site roles, last sign-in time.
 - Sign-in sessions: a random session id in a cookie (`HttpOnly`, `SameSite=Lax`, and `Secure`
-  with `SNOWPRINT_SECURE_COOKIES=true`) and the session row in the database, deleted on sign-out. This cookie is for
-  the dashboard only; visitors of tracked sites never get one.
+  with `SNOWPRINT_SECURE_COOKIES=true`) and the session row in the database, deleted on sign-out
+  or, once expired (after 30 days), by an hourly job. This cookie is for the dashboard only;
+  visitors of tracked sites never get one.
 - Invite links, share links and API keys: only SHA-256 digests are stored; the secret is
   shown once. Share-link passwords are stored as Argon2id hashes.
 - Share links: a visitor who enters a share link's password gets a second cookie
   (`snowprint_share`, same flags as the sign-in cookie) that remembers which links they
   unlocked. Links without a password set no cookie.
 - MCP calls are logged with the tool, site, key id and duration, never the arguments.
+- Rate limits (failed sign-ins, wrong share-link passwords, MCP calls per key) are counted
+  in the `rate_limits` table: a bucket name, a window start and a count. Sign-in buckets use
+  the SHA-256 of the email address, never the address. Rows are deleted after a day.
 
 ## Logs
 

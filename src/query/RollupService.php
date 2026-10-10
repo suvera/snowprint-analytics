@@ -6,6 +6,7 @@ namespace dev\suvera\snowprint\query;
 use dev\winterframework\pdbc\PdbcTemplate;
 use dev\winterframework\stereotype\Autowired;
 use dev\winterframework\stereotype\Service;
+use dev\winterframework\txn\stereotype\Transactional;
 
 /**
  * Read side of the daily rollups (rollup_daily, migration 007). Each site has
@@ -90,6 +91,7 @@ class RollupService {
      * Forgets a site's rollups for the days whose raw events still exist, so
      * they are rebuilt (after a timezone change). Older rollups stay.
      */
+    #[Transactional]
     public function rebuildFromRawEvents(int $siteId, string $timezone): void {
         $first = $this->db->queryForList('SELECT min(ts) AS first FROM events WHERE site_id = ?', [$siteId])[0]['first'] ?? null;
         if ($first !== null) {

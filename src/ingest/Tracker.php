@@ -6,9 +6,9 @@ namespace dev\suvera\snowprint\ingest;
 use dev\suvera\snowprint\privacy\SaltService;
 use dev\suvera\snowprint\privacy\VisitorHasher;
 use dev\suvera\snowprint\site\SiteDirectory;
-use dev\winterframework\core\context\ApplicationContext;
 use dev\winterframework\stereotype\Autowired;
 use dev\winterframework\stereotype\Service;
+use dev\winterframework\stereotype\Value;
 
 /**
  * Turns one tracker request into one buffered `events` row. The IP and user
@@ -34,13 +34,11 @@ class Tracker {
     #[Autowired]
     private GeoLocator $geo;
 
-    #[Autowired]
-    private ApplicationContext $ctx;
-
-    private ?bool $respectDnt = null;
+    #[Value('${snowprint.ingest.respectDnt}', true)]
+    private bool $respectDnt = true;
 
     public function track(TrackingPayload $payload, ClientInfo $client, ?\DateTimeImmutable $now = null): string {
-        if ($client->doNotTrack && $this->respectDnt()) {
+        if ($client->doNotTrack && $this->respectDnt) {
             return self::DO_NOT_TRACK;
         }
         if (BotFilter::isBot($client->userAgent)) {
@@ -88,13 +86,5 @@ class Tracker {
             'props' => $payload->props === [] ? null : json_encode($payload->props, JSON_UNESCAPED_UNICODE),
         ]);
         return self::ACCEPTED;
-    }
-
-    private function respectDnt(): bool {
-        return $this->respectDnt ??= self::truthy($this->ctx->getPropertyStr('snowprint.ingest.respectDnt', 'true'));
-    }
-
-    public static function truthy(mixed $value): bool {
-        return in_array(strtolower(trim((string) $value)), ['1', 'true', 'yes', 'on'], true);
     }
 }

@@ -81,7 +81,7 @@ password. `deploy/deploy.sh` refuses to run without it. The settings that matter
 | `mode` | `single` | `single` or `split` |
 | `database.url` | `pgsql:host=pg.db.svc.cluster.local;port=5432;dbname=snowprint` | PDO DSN of your PostgreSQL |
 | `database.user` | `snowprint` | the role from step 2 |
-| `database.maxConnections` | `4` | connections per process, 7 processes per pod (see "Database connections") |
+| `database.maxConnections` | `4` | connections per process; 6 processes per single/worker pod, 4 per web/ingest pod (see "Database connections") |
 | `database.existingSecret` | `snowprint-db` | Secret holding the password (recommended) |
 | `database.password` | | or let the chart create the Secret from this value |
 | `ingress.enabled`, `ingress.host`, `ingress.className` | `true`, `stats.example.com`, `nginx` | public hostname |
@@ -149,16 +149,18 @@ split:
   worker: { replicas: 1 }
 ```
 
-Workers can run more than one replica: their scheduled jobs use PostgreSQL advisory locks
-or are idempotent.
+Workers can run more than one replica: rollups and retention take a lock in PostgreSQL
+(Winter Boot's `#[Lockable]`, table `winter_locks`) so one pod runs them at a time, and the
+other jobs use advisory locks or are idempotent.
 
-**Database connections.** Every pod runs 7 processes, and each may keep
-`database.maxConnections` (default 4) connections open, so a pod holds at most 28. Add up
-all pods at their maximum replicas (the autoscaler's `maxReplicas`), plus 1 for the
-migration Job and whatever else uses the server, and keep it below PostgreSQL's
-`max_connections` (default 100). The example above can reach 2 + 10 + 1 = 13 pods, 364
-connections: lower `maxConnections` to 2 (182) and raise `max_connections`, or lower
-`maxReplicas`. When the server is full, new pods and the migration Job fail with
+**Database connections.** Each process that uses the database may keep
+`database.maxConnections` (default 4) connections open. Single-mode and worker pods run 6
+such processes (4 HTTP workers, 2 scheduler workers), so they hold at most 24; web and
+ingest pods run 4 (16). Add up all pods at their maximum replicas (the autoscaler's
+`maxReplicas`), plus 1 for the migration Job and whatever else uses the server, and keep it
+below PostgreSQL's `max_connections` (default 100). The example above can reach 2 web +
+10 ingest + 1 worker pods, 2 × 16 + 10 × 16 + 24 = 216 connections: lower `maxConnections`
+to 2 (108) and raise `max_connections`, or lower `maxReplicas`. When the server is full, new pods and the migration Job fail with
 `sorry, too many clients already`.
 
 ## Upgrading
