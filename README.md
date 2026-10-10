@@ -12,11 +12,6 @@ One PHP container plus Postgres. No cookies. Ask your traffic questions from Cla
 > with a hash whose salt rotates every 24 hours and is then discarded, so you see your
 > traffic without being able to follow any one person.
 
-> [!WARNING]
-> **Pre-alpha.** Snowprint tracks, reports and answers MCP queries (see the live instance
-> below), but there is no release yet: expect breaking changes until 1.0. Follow the
-> [roadmap](#roadmap) or watch the repo for the first release.
-
 **Live instance:** [snowprint.suvera.xyz/ui](https://snowprint.suvera.xyz/ui/), a real Snowprint
 deployment on Kubernetes tracking the [Winter Boot documentation](https://suvera.github.io/winter-boot/).
 
@@ -141,25 +136,26 @@ cp .env.example .env
 
 Edit `.env`:
 
-| Variable | Example | What it is |
-|---|---|---|
-| `SNOWPRINT_DB_URL` | `pgsql:host=db.example.com;port=5432;dbname=snowprint` | Where PostgreSQL is (PDO DSN) |
-| `SNOWPRINT_DB_USER` | `snowprint` | The login from step 1 |
-| `SNOWPRINT_DB_PASSWORD` | `choose-a-strong-password` | Its password |
-| `SNOWPRINT_DB_MAX_CONNECTIONS` | `4` | Optional, default `4`. Connections each of the container's 7 processes may keep open, so the container uses at most 7 × this (28). Keep it below PostgreSQL's `max_connections` (default 100) together with everything else on that server |
-| `SNOWPRINT_TRUST_PROXY` | `true` | Optional, default `false`. Take the visitor IP from proxy headers, in order: `CF-Connecting-IP` (Cloudflare / cloudflared), `X-Forwarded-For` (leftmost), `X-Real-IP`, then the connection. Enable only behind a proxy that sets them (Cloudflare Tunnel, nginx, Caddy, Traefik, an ingress): otherwise visitors could forge them |
-| `SNOWPRINT_RESPECT_DNT` | `false` | Optional, default `true`. Ignore visits from browsers that send `DNT: 1` |
-| `SNOWPRINT_GEOIP_DOWNLOAD` | `dbip-city-lite` | Optional. Download DB-IP Lite at start-up for locations (see below) |
-| `SNOWPRINT_GEOIP_DB` | `/geo/city.mmdb` | Optional. Your own GeoIP database inside the container (see below) |
-| `SNOWPRINT_LOG_CLIENT_IP` | `true` | **Debugging only**, default `false`. Log each tracker request's resolved client IP and the proxy headers it came from. Raw IPs in logs break the privacy promise: switch it off once your proxy setup is verified |
-| `SNOWPRINT_REQUEST_TRACE` | `true` | Optional, default `false`. Log one line per request: method, path, status, duration |
-| `SNOWPRINT_JSON_PRETTY` | `true` | Optional, default `false`. Indent JSON API responses |
-| `SNOWPRINT_PUBLIC_URL` | `https://stats.example.com` | Optional. Public base URL that websites load `/snow.js` from and send events to; used in the dashboard's tracking snippet. Default: the address the dashboard is opened on |
-| `SNOWPRINT_SMTP_HOST` | `smtp.example.com` | Optional. SMTP server that emails invite links. Not set: admins copy the links themselves |
-| `SNOWPRINT_SMTP_PORT` | `587` | Optional, default `587` |
-| `SNOWPRINT_SMTP_ENCRYPTION` | `ssl` | Optional, default `starttls` (port 587). `ssl` for implicit TLS (port 465), `none` only for a relay on a trusted network |
-| `SNOWPRINT_SMTP_USER` / `SNOWPRINT_SMTP_PASSWORD` | `stats@example.com` | Optional. SMTP login (`AUTH LOGIN`); leave unset for a relay without login |
-| `SNOWPRINT_SMTP_FROM` | `Stats <stats@example.com>` | Optional. Sender address. Default: the SMTP user |
+| Variable | Example |
+|---|---|
+| `SNOWPRINT_DB_URL`<br>Where PostgreSQL is (PDO DSN) | `pgsql:host=db.example.com;port=5432;dbname=snowprint` |
+| `SNOWPRINT_DB_USER`<br>The login from step 1 | `snowprint` |
+| `SNOWPRINT_DB_PASSWORD`<br>Its password | `choose-a-strong-password` |
+| `SNOWPRINT_DB_MAX_CONNECTIONS`<br>Optional, default `4`. Connections each of the container's 7 processes may keep open, so the container uses at most 7 × this (28). Keep it below PostgreSQL's `max_connections` (default 100) together with everything else on that server | `4` |
+| `SNOWPRINT_TRUST_PROXY`<br>Optional, default `false`. Take the visitor IP from proxy headers, in order: `CF-Connecting-IP` (Cloudflare / cloudflared), `X-Forwarded-For` (leftmost), `X-Real-IP`, then the connection. Enable only behind a proxy that sets them (Cloudflare Tunnel, nginx, Caddy, Traefik, an ingress): otherwise visitors could forge them | `true` |
+| `SNOWPRINT_RESPECT_DNT`<br>Optional, default `true`. Ignore visits from browsers that send `DNT: 1` | `false` |
+| `SNOWPRINT_GEOIP_DOWNLOAD`<br>Optional. Download DB-IP Lite at start-up for locations (see below) | `dbip-city-lite` |
+| `SNOWPRINT_GEOIP_DB`<br>Optional. Your own GeoIP database inside the container (see below) | `/geo/city.mmdb` |
+| `SNOWPRINT_LOG_CLIENT_IP`<br>**Debugging only**, default `false`. Log each tracker request's resolved client IP and the proxy headers it came from. Raw IPs in logs break the privacy promise: switch it off once your proxy setup is verified | `true` |
+| `SNOWPRINT_REQUEST_TRACE`<br>Optional, default `false`. Log one line per request: method, path, status, duration | `true` |
+| `SNOWPRINT_JSON_PRETTY`<br>Optional, default `false`. Indent JSON API responses | `true` |
+| `SNOWPRINT_PUBLIC_URL`<br>Optional. Public base URL that websites load `/snow.js` from and send events to; used in the dashboard's tracking snippet. Default: the address the dashboard is opened on | `https://stats.example.com` |
+| `SNOWPRINT_SMTP_HOST`<br>Optional. SMTP server that emails invite links. Not set: admins copy the links themselves | `smtp.example.com` |
+| `SNOWPRINT_SMTP_PORT`<br>Optional, default `587` | `587` |
+| `SNOWPRINT_SMTP_ENCRYPTION`<br>Optional, default `starttls` (port 587). `ssl` for implicit TLS (port 465), `none` only for a relay on a trusted network | `ssl` |
+| `SNOWPRINT_SMTP_USER` / `SNOWPRINT_SMTP_PASSWORD`<br>Optional. SMTP login (`AUTH LOGIN`); leave unset for a relay without login | `stats@example.com` |
+| `SNOWPRINT_SMTP_FROM`<br>Optional. Sender address. Default: the SMTP user | `Stats <stats@example.com>` |
+
 
 - PostgreSQL on the **same machine** as Docker: use `host=host.docker.internal` and add
   `--add-host=host.docker.internal:host-gateway` to `docker run` (step 3).
@@ -189,10 +185,9 @@ Build the image from this repository (Winter Boot comes from Packagist):
 
 ```bash
 docker build -f docker/Dockerfile -t snowprint-analytics .
-docker run -d --name snowprint --restart unless-stopped \
-  -p 7669:7669 --env-file .env \
-  --add-host=host.docker.internal:host-gateway \
-  snowprint-analytics
+
+docker run -d --name snowprint --restart unless-stopped -p 7669:7669 --env-file .env \
+  --add-host=host.docker.internal:host-gateway snowprint-analytics
 
 curl http://localhost:7669/api/system/health      # {"status": "UP"}
 ```
@@ -215,9 +210,14 @@ Add sites in the dashboard (**Sites → Add a site**), or with the operator cons
 the container:
 
 ```bash
-docker exec snowprint bin/console.sh site:add example.com Europe/Berlin   # timezone optional
+# timezone optional
+docker exec snowprint bin/console.sh site:add example.com Europe/Berlin
+
 docker exec snowprint bin/console.sh site:list
-docker exec snowprint bin/console.sh site:set example.com retention 365  # raw events kept (days, 0 = forever)
+
+# raw events kept (days, 0 = forever)
+docker exec snowprint bin/console.sh site:set example.com retention 365
+
 docker exec snowprint bin/console.sh help
 ```
 
@@ -343,14 +343,20 @@ Dockerfile, so it includes all of them.
 
 ```bash
 composer install
+
 migrations/build-phar.sh      # builds Winter Boot's SQL migrator (once)
+
 migrations/run.sh             # applies migrations/analytics/*.sql
+
 php bin/server.php            # http://localhost:7669
+
 composer test
 composer test:tracker         # snow.js behaviour tests (Node 18+)
 composer test:ui              # dashboard unit tests (Node 18+)
+
 tests/integration.sh          # SQL reports against a throwaway PostgreSQL (Docker)
 tests/helm-e2e.sh             # the Helm guide on a throwaway kind cluster
+
 docker/build.sh               # build suvera/snowprint:<version> + :latest (--push to publish)
 ```
 
@@ -366,50 +372,10 @@ export SNOWPRINT_DB_URL='pgsql:host=127.0.0.1;port=5432;dbname=snowprint'
 export SNOWPRINT_DB_USER=snowprint SNOWPRINT_DB_PASSWORD='your-password'
 ```
 
-`tests/e2e.sh` checks the whole Install section end to end in Docker, using a throwaway
-PostgreSQL container. CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs these
-same scripts on every push and pull request: unit and integration tests, the tracker and
-dashboard tests, `tests/e2e.sh` on PostgreSQL 15 and 18, and `tests/helm-e2e.sh`.
-
 Dashboard development (Node 18+): `cd ui && npm ci && npm run dev` serves the React app
 with hot reload on http://localhost:5173/ui/ and proxies `/api` to a Snowprint running on
 :7669. `npm run build` writes it to `public/ui/` (the Docker image does this itself).
 
-### Project layout
-
-```
-bin/            server.php: launcher (SNOWPRINT_ROLE = all | web | ingest | worker);
-                console.sh: operator console (sites, API keys)
-config/         all settings: application.yml (app + migrator), logger.yml
-docker/         Dockerfile (from Winter Boot's base image), build.sh, entrypoint
-deploy/         Helm chart (helm/), deploy.sh, uninstall.sh, values.example.yaml
-docs/           product requirements and design notes
-migrations/     run.sh, build-phar.sh, and SQL per datasource (analytics/)
-src/            PHP namespace dev\suvera\snowprint
-  boot/         one Winter Boot starter per role (scanNamespaces per role)
-  infra/        framework wiring in code: #[Configuration] beans, interceptors
-  ingest/       /api/event and Matomo tracker endpoints, batching, bot filter, GeoIP
-  privacy/      daily salt rotation, visitor hashing
-  rollup/       scheduled jobs: sessionizer, daily rollups, retention, partitions
-  query/        reporting queries shared by the dashboard and MCP
-  web/          dashboard API, sign-in, users, operator API
-  mcp/          MCP endpoint and tools
-  site/         sites, users, roles, API keys, goals
-ui/             dashboard: React + TypeScript (Vite), built into public/ui/
-public/         served as-is by Swoole: snow.js (the tracker), ui/ (built dashboard)
-tests/          PHPUnit tests, tracker tests (Node), e2e.sh: the documented install end to end
-bench/          ingest benchmark harness
-```
-
-## Roadmap
-
-| Milestone | Scope |
-|---|---|
-| M0 spike | Ingest path, batched writes, published benchmark |
-| M1 MVP | Tracking script, dashboard, goals, users, rollups and retention, MCP tools, Docker image, Helm chart |
-| M2 launch | Share links, CI, published image and benchmark, docs |
-| v1.0 | Matomo tracker compatibility and importer, email reports, Redis tier |
-| v1.1 | Basic ecommerce, Matomo Reporting API subset, Kafka/OpenSearch tiers, WordPress plugin |
 
 ## Contributing
 
