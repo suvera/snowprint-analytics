@@ -36,6 +36,13 @@ winter:
     json:
       # Indent JSON responses (handy when reading the API with curl).
       prettyPrint: $env.SNOWPRINT_JSON_PRETTY || false
+  mcp:
+    # Winter Boot's MCP server (#[McpTool], #[McpResource], #[McpPrompt] in src/mcp).
+    # Bearer API keys and the rate limit: mcp/McpAuthInterceptor.
+    path: /api/mcp
+    serverName: snowprint
+    serverTitle: Snowprint Analytics
+    instructions: "Snowprint is privacy-first web analytics. Start with list_sites. Visitors are anonymous and counted per day (no cookies). Periods are interpreted in each site's timezone. To explain a change, compare periods with get_overview, locate the day with find_anomalies or get_timeseries, then use get_breakdown (source, page, country, ...) on that day to find what changed."
   task:
     # No #[EnableAsync] (decision D8), so there is no async task process.
     scheduling:

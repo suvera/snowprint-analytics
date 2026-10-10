@@ -23,8 +23,9 @@ before building a feature.
 2. **Winter Boot first.** Solve problems with Winter Boot features (DI, REST, `#[Async]`,
    `#[Scheduled]`, `#[Lockable]`, `#[Cacheable]`, `#[Transactional]`, migrator, actuator,
    modules) before adding a third-party library. Reusable pieces (the ingest buffer, the
-   Matomo tracker façade) should stay generic enough to upstream into Winter Boot. MCP
-   (`src/mcp`, `#[McpTool]`) deliberately stays in Snowprint.
+   Matomo tracker façade) should stay generic enough to upstream into Winter Boot. MCP is
+   Winter Boot's built-in server (`#[McpTool]`, `#[McpResource]`, `#[McpPrompt]`, 2.1.7+):
+   `src/mcp` holds only Snowprint's tools, resources, prompts and their guards.
 3. **Stateless roles.** One image, four roles: `web`, `ingest`, `worker`, `importer`
    (PRD §9.0). Shared state lives in Postgres (or Redis/Kafka in scaled tiers), never in a
    worker's memory beyond a flush window. Roles talk through the database or message bus,
@@ -63,7 +64,9 @@ before building a feature.
   - `rollup/` scheduled hourly/daily aggregation, retention sweeps
   - `query/` reporting queries shared by the dashboard and MCP
   - `web/` dashboard, management API, auth, share links (`StatusController` → `/api/status`)
-  - `mcp/` MCP endpoint (`/api/mcp`) and tools
+  - `mcp/` MCP tools, resources and prompts for Winter Boot's MCP server (`winter.mcp.*`,
+    endpoint `/api/mcp`); `McpAuthInterceptor` (Bearer API key, rate limit) and
+    `McpToolGuard` (read-only keys, audit log, metric)
   - `site/` sites, users, roles, API keys, goals
   - `matomo/` tracker compatibility and importer
 - `ui/` the dashboard: React + TypeScript SPA (Vite), decision D10. **Winter Boot is a
@@ -218,7 +221,16 @@ curl localhost:7669/api/system/health            # {"status":"UP"}
 - The dashboard's CSRF header check (`X-Snowprint: 1` on non-GET `/api/ui`, `/api/share`)
   is `web/ui/UiHeaderInterceptor`; handlers don't repeat it.
 - Interceptors: `HandlerInterceptor` registered in a
-  `#[Configuration(name: 'webMvcConfigurer')]` class implementing `WebMvcConfigurer`.
+  `#[Configuration(name: 'webMvcConfigurer')]` class implementing `WebMvcConfigurer`. Never
+  autowire database-backed beans into that class or pass them to an interceptor's
+  constructor: the connection pool would be created before Swoole forks and the server
+  fails to start ("event-loop has already been created"). Look them up per request from
+  `ApplicationContext` (see `McpAuthInterceptor`).
+- MCP: `#[McpTool]` service methods get an `HttpRequest` parameter (the agent's request; not a
+  tool argument) and resolve the API key with `McpCallers`. Keep `name:` fixed (agents depend
+  on it), set `readOnly: true` on read tools (service tools default to destructive) and
+  `outputSchema` to keep `structuredContent`. Hand-written `inputSchema` properties must match
+  the parameter names.
 
 ### Logging
 
@@ -252,15 +264,16 @@ user agents, API keys, or MCP tool arguments containing free text.
 
 ## Winter Boot Version
 
-Winter Boot comes from Packagist (`suvera/winter-boot: ^2.1.6`, exact version in
+Winter Boot comes from Packagist (`suvera/winter-boot: ^2.1.7`, exact version in
 `composer.lock`); the native extension and the migrator PHAR are built from that package.
 To try framework changes locally, add a temporary Composer path repository pointing at a
 winter-boot checkout and do not commit it. `minimum-stability` stays `dev` because Winter
 Boot requires `suvera/monolog-cascade: dev-master`.
 
-Snowprint uses Winter Boot **2.1.6** (case-insensitive headers, coroutine-safe KV client,
+Snowprint uses Winter Boot **2.1.7** (case-insensitive headers, coroutine-safe KV client,
 dotted routes, `$env` port typing, worker hooks `#[OnWorkerStart]` / `#[OnWorkerStop]`,
 `/api/system/health` answers 503 when DOWN, metrics recorded before the first scrape, compact JSON,
 closed pool connections that really disconnect, typed `#[Value]`, 4xx logged at INFO and
-`PdoLockManager` for distributed `#[Lockable]`; Snowprint caps the pool at 4). Report new framework issues in
+`PdoLockManager` for distributed `#[Lockable]`, MCP tools, resources and prompts; Snowprint caps
+the pool at 4). Report new framework issues in
 `TASKS.md` under "Winter Boot upstream list".

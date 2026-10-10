@@ -26,7 +26,6 @@ composer.phar
 /ui/node_modules/
 /tracker/node_modules/
 node_modules/
-docs/winter-boot-usage-review.md
 
 # GeoIP databases (user-supplied, licensed separately)
 *.mmdb

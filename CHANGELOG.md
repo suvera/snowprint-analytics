@@ -19,6 +19,16 @@ All notable changes to this project are documented here. The format follows
 - Winter Boot 2.1.6. Rollups and the retention sweep take a PostgreSQL lock (`#[Lockable]`
   with `PdoLockManager`, table `winter_locks`, migration 011), so with several worker pods
   only one runs them at a time; the operator console answers 409 while one is running.
+- Winter Boot 2.1.7. The MCP server at `/api/mcp` is now Winter Boot's built-in one
+  (`#[McpTool]`, `#[McpResource]`, `#[McpPrompt]`); Snowprint's own JSON-RPC server is gone.
+  Tool names, schemas, results, resources, prompts, API-key auth, the rate limit, the audit
+  log and `snowprint_mcp_tool_calls_total` are unchanged, and Winter Boot adds
+  `mcp_tool_calls` and `mcp_tool_duration`. Differences: JSON-RPC batches answer 400;
+  mistyped or out-of-range tool arguments (e.g. `"limit": "5"` or `500`) are tool errors
+  instead of being converted or clamped; an unknown dimension reads "dimension: must be one
+  of ..."; reading an unknown or inaccessible resource answers -32002 "Resource not found";
+  `prompts/get` rejects unknown arguments; requests over 1 MB answer 413; the resource
+  template is named `site_summary`; browser requests carrying an `Origin` header are refused.
 - API errors use Winter Boot's error responses: `{"timestamp", "status", "message",
   "error"}` (the `error` text is unchanged), and client errors log one INFO line.
 - Bad `limit` values on `/api/ui/stats/breakdown` answer 400 instead of being read as 0.

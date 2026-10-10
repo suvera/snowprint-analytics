@@ -49,7 +49,8 @@ bolted on: each part of Snowprint maps to a Winter Boot feature.
 
 | Snowprint needs | Winter Boot provides |
 |---|---|
-| Tracking, dashboard and MCP endpoints | `#[RestController]`, `#[GetMapping]`, `#[PostMapping]`, … |
+| Tracking and dashboard endpoints | `#[RestController]`, `#[GetMapping]`, `#[PostMapping]`, … |
+| MCP server for AI assistants | `#[McpTool]`, `#[McpResource]`, `#[McpPrompt]`, `McpToolInterceptor` |
 | Batched event writes | Swoole worker start/stop hooks for a per-worker buffer, `PdbcTemplate` multi-row inserts |
 | Sessions, daily rollups, retention, salt rotation | `#[Scheduled]` jobs; `#[Lockable]` with a PostgreSQL lock manager so rollups and retention run on one pod at a time |
 | Atomic multi-step writes | `#[Transactional]` service methods |

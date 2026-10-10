@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "89a8c9bda4f2f1f851eb611a32231d36",
+    "content-hash": "22be0a897fb23fd42a0a78e6464bb13c",
     "packages": [
         {
             "name": "brick/math",
@@ -2021,16 +2021,16 @@
         },
         {
             "name": "suvera/winter-boot",
-            "version": "2.1.6",
+            "version": "2.1.7",
             "source": {
                 "type": "git",
                 "url": "https://github.com/suvera/winter-boot.git",
-                "reference": "9f897e7b0843b1e7c0a7cfa6a585259afd32ce5a"
+                "reference": "674a978d2fbee8c148ae3cd7eb7d807ae7f242be"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/suvera/winter-boot/zipball/9f897e7b0843b1e7c0a7cfa6a585259afd32ce5a",
-                "reference": "9f897e7b0843b1e7c0a7cfa6a585259afd32ce5a",
+                "url": "https://api.github.com/repos/suvera/winter-boot/zipball/674a978d2fbee8c148ae3cd7eb7d807ae7f242be",
+                "reference": "674a978d2fbee8c148ae3cd7eb7d807ae7f242be",
                 "shasum": ""
             },
             "require": {
@@ -2078,9 +2078,9 @@
             ],
             "support": {
                 "issues": "https://github.com/suvera/winter-boot/issues",
-                "source": "https://github.com/suvera/winter-boot/tree/2.1.6"
+                "source": "https://github.com/suvera/winter-boot/tree/2.1.7"
             },
-            "time": "2026-10-10T05:36:06+00:00"
+            "time": "2026-10-10T06:08:04+00:00"
         },
         {
             "name": "swoole/ide-helper",

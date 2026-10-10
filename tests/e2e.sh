@@ -179,7 +179,7 @@ done
 call=$(mcp "$key" '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"get_overview","arguments":{"site":"example.com","period":"today"}}}')
 case "$call" in "200 "*'"structuredContent"'*'"current":{"visitors":'[1-9]*'"isError":false'*) ;; *) fail "MCP get_overview: $call" ;; esac
 bad=$(mcp "$key" '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"get_breakdown","arguments":{"site":"example.com","dimension":"shoe_size"}}}')
-case "$bad" in *'unknown dimension'*'"isError":true'*) ;; *) fail "MCP bad argument should be a tool error: $bad" ;; esac
+case "$bad" in *'dimension: must be one of'*'"isError":true'*) ;; *) fail "MCP bad argument should be a tool error: $bad" ;; esac
 console site:add other.test >/dev/null
 other=$(console key:create other other.test | sed -n 's/.*"key": \{0,1\}"\(sp_[0-9a-f]*\)".*/\1/p')
 denied=$(mcp "$other" '{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"get_overview","arguments":{"site":"example.com"}}}')
